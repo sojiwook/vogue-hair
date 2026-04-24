@@ -581,16 +581,21 @@ function KakaoTab({ customer }) {
   };
 
   const generate = async () => {
-    if (!latest) return alert("방문 기록을 먼저 추가해주세요.");
-    setGenerating(true); setMsg(""); setSent(false); setDone(false);
-    try {
-      await callAI(PROMPTS[msgType], null, null, text => setMsg(p => p + text), "카카오", customer.name, customer.age);
-      setDone(true);
-    } catch (e) {
-      setMsg(`⚠️ 오류: ${e.message}`); setDone(true);
-    }
-    setGenerating(false);
-  };
+  if (!latest) return alert("방문 기록을 먼저 추가해주세요.");
+  setGenerating(true); setMsg(""); setSent(false); setDone(false);
+  try {
+    let fullMsg = "";
+    await callAI(PROMPTS[msgType], null, null, text => {
+      fullMsg += text;
+      setMsg(p => p + text);
+    }, "카카오", customer.name, customer.age);
+    setDone(true);
+    await supabase.from("visits").update({ kakao_message: fullMsg }).eq("id", latest.id);
+  } catch (e) {
+    setMsg(`⚠️ 오류: ${e.message}`); setDone(true);
+  }
+  setGenerating(false);
+};
 
   return (
     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
@@ -672,6 +677,9 @@ function KakaoTab({ customer }) {
 function CustomerDetail({ customer, onBack, onUpdate }) {
   const [tab, setTab] = useState("scalp");
   const TABS = [
+    useEffect(() => {
+  if (latest?.kakao_message) setMsg(latest.kakao_message);
+}, [latest]);
     { id: "scalp", label: "🔬 두피 분석" },
     { id: "history", label: "📅 방문 히스토리" },
     { id: "kakao", label: "💬 카카오 발송" },
