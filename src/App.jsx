@@ -714,9 +714,9 @@ function CustomerDetail({ customer, onBack, onUpdate }) {
           }}>{t.label}</button>
         ))}
       </div>
-      {tab === "scalp" && <ScalpTab customer={customer} />}
-      {tab === "history" && <HistoryTab customer={customer} onAddVisit={v => onUpdate({ ...customer, visits: [...visits, v] })} />}
-      {tab === "kakao" && <KakaoTab customer={customer} />}
+     <div style={{ display: tab === "scalp" ? "block" : "none" }}><ScalpTab customer={customer} /></div>
+<div style={{ display: tab === "history" ? "block" : "none" }}><HistoryTab customer={customer} onAddVisit={v => onUpdate({ ...customer, visits: [...visits, v] })} /></div>
+<div style={{ display: tab === "kakao" ? "block" : "none" }}><KakaoTab customer={customer} /></div>
     </div>
   );
 }
