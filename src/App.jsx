@@ -6,7 +6,7 @@ const SHOP = { name: "보그헤어위시티점", en: "VOGUE HAIR WISHCITY" };
 const STYLISTS = ["이서", "승미", "우기"];
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_KEY;
-
+const ANTHROPIC_KEY = import.meta.env.VITE_ANTHROPIC_KEY;
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // ── 색상 ──────────────────────────────────────
