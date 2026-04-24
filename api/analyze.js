@@ -7,6 +7,8 @@ export default async function handler(req, res) {
   try {
     const { image, customerInfo } = req.body;
 
+    const prompt = `Scalp expert AI. Analyze [${customerInfo.label}] scalp image.\nCustomer: ${customerInfo.name}, age ${customerInfo.age}\n\nPlease respond in Korean:\n**두피 타입**\n**주요 지표**\n- 모공 청결도: XX/100\n- 두피 수분도: XX/100\n- 피지 분비량: XX/100\n- 모낭 건강도: XX/100\n- 염증·자극: XX/100\n**주의 소견**\n**추천 케어**\n**개선 예상**`;
+
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -24,10 +26,7 @@ export default async function handler(req, res) {
               type: 'image',
               source: { type: 'base64', media_type: image.mimeType || 'image/jpeg', data: image.data }
             },
-            {
-              type: 'text',
-              text: `두피 전문 AI입니다. [${customerInfo.label}] 두피 이미지를 분석해주세요.\n고객: ${customerInfo.name}님 (${customerInfo.age}세)\n\n**🔬 두피 타입**\n**📊 주요 지표**\n- 모공 청결도: XX/100\n- 두피 수분도: XX/100\n- 피지 분비량: XX/100\n- 모낭 건강도: XX/100\n- 염증·자극: XX/100\n**🚨 주의 소견**\n**💆 추천 케어**\n**📈 개선 예상**\n\n각 섹션 3줄 이내, 한국어로.`
-            }
+            { type: 'text', text: prompt }
           ]
         }]
       }),
@@ -35,7 +34,7 @@ export default async function handler(req, res) {
 
     if (!response.ok) {
       const err = await response.json();
-      return res.status(response.status).json({ error: err });
+      return res.status(response.status).json({ error: JSON.stringify(err) });
     }
 
     const data = await response.json();
