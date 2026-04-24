@@ -6,7 +6,6 @@ const SHOP = { name: "보그헤어위시티점", en: "VOGUE HAIR WISHCITY" };
 const STYLISTS = ["이서", "승미", "우기"];
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_KEY;
-const ANTHROPIC_KEY = import.meta.env.VITE_ANTHROPIC_KEY;
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
@@ -19,48 +18,27 @@ const C = {
   kakao: "#FEE500",
 };
 
-// ── AI 호출 ───────────────────────────────────
-async function callAI(prompt, imgBase64, imgType, onChunk) {
-  const content = imgBase64
-    ? [
-        { type: "image", source: { type: "base64", media_type: imgType, data: imgBase64 } },
-        { type: "text", text: prompt },
-      ]
-    : prompt;
+// ── AI 호출 (서버 경유) ───────────────────────
+async function callAI(prompt, imgBase64, imgType, onChunk, label, customerName, customerAge) {
+  const body = {
+    prompt,
+    image: imgBase64 ? { data: imgBase64, mimeType: imgType } : null,
+    customerInfo: { label: label || "두피", name: customerName || "고객", age: customerAge || 0 },
+  };
 
   const res = await fetch("/api/analyze", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-        model: "claude-sonnet-4-5",
-      max_tokens: 1000,
-      stream: true,
-      messages: [{ role: "user", content }],
-    }),
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
   });
 
-  if (!res.ok) throw new Error(`API 오류: ${res.status}`);
-
-  const reader = res.body.getReader();
-  const dec = new TextDecoder();
-  let buf = "";
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buf += dec.decode(value, { stream: true });
-    const lines = buf.split("\n");
-    buf = lines.pop();
-    for (const line of lines) {
-      if (!line.startsWith("data: ")) continue;
-      try {
-        const j = JSON.parse(line.slice(6).trim());
-        if (j.type === "content_block_delta" && j.delta?.text) onChunk(j.delta.text);
-      } catch {}
-    }
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.error || `API 오류: ${res.status}`);
   }
+
+  const data = await res.json();
+  onChunk(data.result || "");
 }
 
 // ── 공통 버튼 ─────────────────────────────────
@@ -320,16 +298,20 @@ function ScalpTab({ customer }) {
   };
 
   const analyze = async idx => {
-    if (!ANTHROPIC_KEY) { alert("Anthropic API 키가 없습니다."); return; }
     const img = images[idx];
     setImages(prev => prev.map((im, i) => i === idx ? { ...im, analyzing: true, report: "", done: false } : im));
     const base64 = img.src.split(",")[1];
     const mediaType = img.src.split(";")[0].split(":")[1];
     try {
+      let fullText = "";
       await callAI(
         `두피 전문 AI입니다. [${img.label}] 두피 이미지를 분석해주세요.\n고객: ${customer.name}님 (${customer.age}세)\n\n**🔬 두피 타입** (판정+근거 1문장)\n**📊 주요 지표**\n- 모공 청결도: XX/100\n- 두피 수분도: XX/100\n- 피지 분비량: XX/100\n- 모낭 건강도: XX/100\n- 염증·자극: XX/100\n**🚨 주의 소견** (2~3개)\n**💆 추천 케어** (2가지)\n**📈 개선 예상**\n\n각 섹션 3줄 이내, 한국어로.`,
         base64, mediaType,
-        text => setImages(prev => prev.map((im, i) => i === idx ? { ...im, report: im.report + text } : im))
+        text => {
+          fullText += text;
+          setImages(prev => prev.map((im, i) => i === idx ? { ...im, report: fullText } : im));
+        },
+        img.label, customer.name, customer.age
       );
       setImages(prev => prev.map((im, i) => i === idx ? { ...im, analyzing: false, done: true } : im));
     } catch (e) {
@@ -439,7 +421,7 @@ function ScalpTab({ customer }) {
                 if (!latest) return alert("먼저 방문 기록을 추가해주세요!");
                 const allReports = images.filter(im => im.done && im.report).map(im => "[" + im.label + "]\n" + im.report).join("\n\n---\n\n");
                 await supabase.from("visits").update({ scalp_report: allReports }).eq("id", latest.id);
-                alert("✅ 두피 분석 결과가 저장됐어요! 탭을 넘겨도 사라지지 않아요.");
+                alert("✅ 두피 분석 결과가 저장됐어요!");
               }} style={{ marginTop: 12, width: "100%", padding: "10px", background: C.green, color: "#fff", border: "none", borderRadius: 10, fontFamily: "inherit", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
                 💾 분석 결과 저장하기
               </button>
@@ -594,10 +576,9 @@ function KakaoTab({ customer }) {
 
   const generate = async () => {
     if (!latest) return alert("방문 기록을 먼저 추가해주세요.");
-    if (!ANTHROPIC_KEY) return alert("Anthropic API 키가 없습니다.");
     setGenerating(true); setMsg(""); setSent(false); setDone(false);
     try {
-      await callAI(PROMPTS[msgType], null, null, text => setMsg(p => p + text));
+      await callAI(PROMPTS[msgType], null, null, text => setMsg(p => p + text), "카카오", customer.name, customer.age);
       setDone(true);
     } catch (e) {
       setMsg(`⚠️ 오류: ${e.message}`); setDone(true);
@@ -770,7 +751,6 @@ export default function App() {
         input[type=range] { height: 4px; }
       `}</style>
 
-      {/* 헤더 */}
       <div style={{ background: "#fff", borderBottom: `1px solid ${C.border}`, position: "sticky", top: 0, zIndex: 100, boxShadow: "0 1px 12px rgba(0,0,0,0.05)" }}>
         <div style={{ maxWidth: 980, margin: "0 auto", padding: "0 24px", height: 58, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -788,7 +768,6 @@ export default function App() {
         </div>
       </div>
 
-      {/* 본문 */}
       <div style={{ maxWidth: 980, margin: "0 auto", padding: "28px 24px 60px" }}>
         {page === "list" && (
           <CustomerList
