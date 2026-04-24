@@ -5,9 +5,18 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
 
   try {
-    const { image, customerInfo } = req.body;
+    const { image, prompt, customerInfo } = req.body;
 
-    const prompt = `Scalp expert AI. Analyze [${customerInfo.label}] scalp image.\nCustomer: ${customerInfo.name}, age ${customerInfo.age}\n\nPlease respond in Korean:\n**두피 타입**\n**주요 지표**\n- 모공 청결도: XX/100\n- 두피 수분도: XX/100\n- 피지 분비량: XX/100\n- 모낭 건강도: XX/100\n- 염증·자극: XX/100\n**주의 소견**\n**추천 케어**\n**개선 예상**`;
+    const content = [];
+    
+    if (image && image.data) {
+      content.push({
+        type: 'image',
+        source: { type: 'base64', media_type: image.mimeType || 'image/jpeg', data: image.data }
+      });
+    }
+    
+    content.push({ type: 'text', text: prompt || `Scalp expert AI. Analyze scalp image for ${customerInfo?.name}. Respond in Korean.` });
 
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -19,16 +28,7 @@ export default async function handler(req, res) {
       body: JSON.stringify({
         model: 'claude-sonnet-4-5',
         max_tokens: 1000,
-        messages: [{
-          role: 'user',
-          content: [
-            {
-              type: 'image',
-              source: { type: 'base64', media_type: image.mimeType || 'image/jpeg', data: image.data }
-            },
-            { type: 'text', text: prompt }
-          ]
-        }]
+        messages: [{ role: 'user', content }]
       }),
     });
 
