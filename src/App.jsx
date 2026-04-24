@@ -558,10 +558,11 @@ function HistoryTab({ customer, onAddVisit }) {
 }
 
 // ── 카카오 발송 탭 ────────────────────────────
-function KakaoTab({ customer }) {
+function KakaoTab({ customer, kakaoMsg, setKakaoMsg }) {
   const [msgType, setMsgType] = useState("full");
   const [note, setNote] = useState("");
-  const [msg, setMsg] = useState("");
+  const msg = kakaoMsg;
+const setMsg = setKakaoMsg;
   useEffect(() => { if (latest?.kakao_message) setMsg(latest.kakao_message); }, [latest?.kakao_message]);
   const [generating, setGenerating] = useState(false);
   const [sent, setSent] = useState(false);
@@ -677,6 +678,7 @@ function KakaoTab({ customer }) {
 // ── 고객 상세 ─────────────────────────────────
 function CustomerDetail({ customer, onBack, onUpdate }) {
   const [tab, setTab] = useState("scalp");
+  const [kakaoMsg, setKakaoMsg] = useState("");
   const TABS = [
  
     { id: "scalp", label: "🔬 두피 분석" },
@@ -716,7 +718,7 @@ function CustomerDetail({ customer, onBack, onUpdate }) {
       </div>
      <div style={{ display: tab === "scalp" ? "block" : "none" }}><ScalpTab customer={customer} /></div>
 <div style={{ display: tab === "history" ? "block" : "none" }}><HistoryTab customer={customer} onAddVisit={v => onUpdate({ ...customer, visits: [...visits, v] })} /></div>
-<div style={{ display: tab === "kakao" ? "block" : "none" }}><KakaoTab customer={customer} /></div>
+<div style={{ display: tab === "kakao" ? "block" : "none" }}><KakaoTab customer={customer} kakaoMsg={kakaoMsg} setKakaoMsg={setKakaoMsg} /></div>
     </div>
   );
 }
