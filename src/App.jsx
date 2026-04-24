@@ -562,6 +562,7 @@ function KakaoTab({ customer }) {
   const [msgType, setMsgType] = useState("full");
   const [note, setNote] = useState("");
   const [msg, setMsg] = useState("");
+  useEffect(() => { if (latest?.kakao_message) setMsg(latest.kakao_message); }, [latest?.kakao_message]);
   const [generating, setGenerating] = useState(false);
   const [sent, setSent] = useState(false);
   const [done, setDone] = useState(false);
@@ -664,9 +665,9 @@ function KakaoTab({ customer }) {
             )}
           </div>
           <div style={{ background: "#fff", padding: "7px 10px", display: "flex", gap: 6 }}>
-            <div style={{ flex: 1, height: 26, background: "#f5f5f5", borderRadius: 13, fontSize: 11, color: "#aaa", padding: "0 10px", display: "flex", alignItems: "center" }}>메시지 입력</div>
+            <div style={{ flex: 1, height: 26, background: "#f5f5f5", borderRadius: 13, fontSize: 11, color: "#aaa", padding: const [msg, setMsg]"0 10px", display: "flex", alignItems: "center" }}>메시지 입력</div>
             <div style={{ width: 26, height: 26, background: C.kakao, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12 }}>▶</div>
-          </div>
+          </div>const [msg, setMsg]
         </div>
       </Card>
     </div>
@@ -677,9 +678,7 @@ function KakaoTab({ customer }) {
 function CustomerDetail({ customer, onBack, onUpdate }) {
   const [tab, setTab] = useState("scalp");
   const TABS = [
-    useEffect(() => {
-  if (latest?.kakao_message) setMsg(latest.kakao_message);
-}, [latest]);
+ 
     { id: "scalp", label: "🔬 두피 분석" },
     { id: "history", label: "📅 방문 히스토리" },
     { id: "kakao", label: "💬 카카오 발송" },
