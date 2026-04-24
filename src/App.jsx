@@ -541,6 +541,12 @@ function HistoryTab({ customer, onAddVisit }) {
               ))}
             </div>
             {v.note && <p style={{ fontSize: 12, color: C.sub, background: C.bg, padding: "8px 12px", borderRadius: 8 }}>📝 {v.note}</p>}
+            {v.scalp_report && (
+  <div style={{ marginTop: 10, background: "#f8f6f2", borderRadius: 8, padding: "10px 14px" }}>
+    <p style={{ fontSize: 11, fontWeight: 800, color: C.gold, marginBottom: 6 }}>🔬 두피 분석 결과</p>
+    <p style={{ fontSize: 12, color: C.sub, lineHeight: 1.8, whiteSpace: "pre-wrap" }}>{v.scalp_report}</p>
+  </div>
+)}
           </Card>
         ))}
         {visits.length === 0 && (
