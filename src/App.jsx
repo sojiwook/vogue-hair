@@ -22,7 +22,7 @@ const C = {
 async function callAI(prompt, imgBase64, imgType, onChunk, label, customerName, customerAge) {
   const body = {
     prompt,
-    image: imgBase64 ? { data: imgBase64, mimeType: imgType } : null,
+   image: imgBase64 ? { data: imgBase64, mimeType: imgType || 'image/jpeg' } : null,
     customerInfo: { label: label || "두피", name: customerName || "고객", age: customerAge || 0 },
   };
 
