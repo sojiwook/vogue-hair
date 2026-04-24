@@ -381,7 +381,7 @@ useEffect(() => {
 }, []);
   const TYPES = [{ id: "full", label: "📊 종합 리포트" }, { id: "simple", label: "💬 간단 감사" }, { id: "product", label: "🧴 제품 추천" }];
   const PROMPTS = {
-    full: `헤어샵 방문 고객 카카오톡 메시지. 친근하고 따뜻한 톤, 이모지, 500자 이내, 마케팅 느낌 없이.\n헤어샵: ${SHOP.name} / 고객: ${customer.name}님 / 담당: ${customer.stylist} / 방문일: ${latest?.date} / 종합점수: ${latest?.score}/100 / 수면: ${latest?.sleep} / 스트레스: ${latest?.stress} / 두피수분: ${latest?.moisture} / 탄력: ${latest?.elasticity} / 시술: ${latest?.service}${note ? ` / 메모: ${note}` : ""}\n형식: 인사+방문감사 → 케어지수 안내 → 핵심팁 1~2가지 → 자연스러운 다음방문 권유 → 마무리`,
+   full: `헤어샵 방문 고객 카카오톡 메시지. 친근하고 따뜻한 톤, 이모지, 500자 이내, 마케팅 느낌 없이.\n헤어샵: ${SHOP.name} / 고객: ${customer.name}님 / 담당: ${customer.stylist} / 방문일: ${latest?.date} / 종합점수: ${latest?.score}/100 / 수면: ${latest?.sleep} / 스트레스: ${latest?.stress} / 두피수분: ${latest?.moisture} / 탄력: ${latest?.elasticity} / 시술: ${latest?.service}${note ? ` / 메모: ${note}` : ""}${latest?.scalp_report ? `\n\n두피 분석 결과:\n${latest.scalp_report.slice(0, 500)}` : ""}\n형식: 인사+방문감사 → 두피분석 결과 핵심 요약 → 맞춤 케어팁 1~2가지 → 자연스러운 다음방문 권유 → 마무리`,
     simple: `카카오톡 감사 메시지 200자 이내. ${SHOP.name} / ${customer.name}님 / ${latest?.score}점 / 홈케어팁 1가지 / 이모지 2~3개`,
     product: `두피 상태 기반 제품 추천 카카오톡. 300자 이내. 강매 없이.\n${customer.name}님 / 수분${latest?.moisture} / 탄력${latest?.elasticity} / 제품 카테고리 2~3가지 + 성분 키워드`,
   };
