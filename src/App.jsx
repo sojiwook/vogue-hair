@@ -541,7 +541,7 @@ export default function App() {
       <div style={{ maxWidth: 980, margin: "0 auto", padding: "28px 24px 60px" }}>
         {page === "list" && <CustomerList customers={customers} onSelect={c => { setSelected(c); setPage("detail"); }} onAdd={() => setPage("add")} loading={loading} />}
         {page === "add" && <AddCustomer onSave={c => { setCustomers(p => [c, ...p]); setPage("list"); }} onCancel={() => setPage("list")} />}
-    {page === "detail" && selected && <CustomerDetail customer={customers.find(c => c.id === selected.id) || selected} onBack={() => setPage("list")} onUpdate={updateCustomer} onDeleteCustomer={id => { setCustomers(prev => prev.filter(c => c.id !== id)); setPage("list"); }} />}
+    {page === "detail" && selected && customers.find(c => c.id === selected.id) && <CustomerDetail customer={customers.find(c => c.id === selected.id)} onBack={() => setPage("list")} onUpdate={updateCustomer} onDeleteCustomer={id => { setCustomers(prev => prev.filter(c => c.id !== id)); setPage("list"); }} />}
       </div>
     </div>
   );
