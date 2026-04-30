@@ -404,77 +404,216 @@ const condMap = { "나쁨": 35, "보통": 55, "좋음": 75 };
   );
 }
 
+// App.jsx 안의 KakaoTab 함수만 교체하세요
+// 📨 카카오톡 발송 버튼 → 솔라피 알림톡 실제 발송
+
 function KakaoTab({ customer, kakaoMsg, setKakaoMsg }) {
   const [msgType, setMsgType] = useState("full");
   const [note, setNote] = useState("");
   const [generating, setGenerating] = useState(false);
+  const [sending, setSending] = useState(false);   // ← 추가
   const [sent, setSent] = useState(false);
   const [done, setDone] = useState(false);
+  const [sendError, setSendError] = useState("");  // ← 추가
+
   const visits = Array.isArray(customer.visits) ? customer.visits : [];
   const latest = visits[visits.length - 1];
-useEffect(() => {
-  if (latest?.kakao_message && !kakaoMsg) {
-    setKakaoMsg(latest.kakao_message);
-    setDone(true);
-  }
-}, []);
-  const TYPES = [{ id: "full", label: "📊 종합 리포트" }, { id: "simple", label: "💬 간단 감사" }, { id: "product", label: "🧴 제품 추천" }];
+
+  useEffect(() => {
+    if (latest?.kakao_message && !kakaoMsg) {
+      setKakaoMsg(latest.kakao_message);
+      setDone(true);
+    }
+  }, []);
+
+  const TYPES = [
+    { id: "full", label: "📊 종합 리포트" },
+    { id: "simple", label: "💬 간단 감사" },
+    { id: "product", label: "🧴 제품 추천" },
+  ];
+
   const PROMPTS = {
-   full: `헤어샵 방문 고객 카카오톡 메시지. 친근하고 따뜻한 톤, 이모지, 500자 이내, 마케팅 느낌 없이.\n헤어샵: ${SHOP.name} / 고객: ${customer.name}님 / 담당: ${customer.stylist} / 방문일: ${latest?.date} / 종합점수: ${latest?.score}/100 / 수면: ${latest?.sleep} / 스트레스: ${latest?.stress} / 두피수분: ${latest?.moisture} / 탄력: ${latest?.elasticity} / 시술: ${latest?.service}${note ? ` / 메모: ${note}` : ""}${latest?.scalp_report ? `\n\n두피 분석 결과:\n${latest.scalp_report.slice(0, 500)}` : ""}\n형식: 인사+방문감사 → 두피분석 결과 핵심 요약 → 맞춤 케어팁 1~2가지 → 자연스러운 다음방문 권유 → 마무리`,
+    full: `헤어샵 방문 고객 카카오톡 메시지. 친근하고 따뜻한 톤, 이모지, 500자 이내, 마케팅 느낌 없이.\n헤어샵: ${SHOP.name} / 고객: ${customer.name}님 / 담당: ${customer.stylist} / 방문일: ${latest?.date} / 종합점수: ${latest?.score}/100 / 수면: ${latest?.sleep} / 스트레스: ${latest?.stress} / 두피수분: ${latest?.moisture} / 탄력: ${latest?.elasticity} / 시술: ${latest?.service}${note ? ` / 메모: ${note}` : ""}${latest?.scalp_report ? `\n\n두피 분석 결과:\n${latest.scalp_report.slice(0, 500)}` : ""}\n형식: 인사+방문감사 → 두피분석 결과 핵심 요약 → 맞춤 케어팁 1~2가지 → 자연스러운 다음방문 권유 → 마무리`,
     simple: `카카오톡 감사 메시지 200자 이내. ${SHOP.name} / ${customer.name}님 / ${latest?.score}점 / 홈케어팁 1가지 / 이모지 2~3개`,
     product: `두피 상태 기반 제품 추천 카카오톡. 300자 이내. 강매 없이.\n${customer.name}님 / 수분${latest?.moisture} / 탄력${latest?.elasticity} / 제품 카테고리 2~3가지 + 성분 키워드`,
   };
 
   const generate = async () => {
     if (!latest) return alert("방문 기록을 먼저 추가해주세요.");
-    setGenerating(true); setKakaoMsg(""); setSent(false); setDone(false);
+    setGenerating(true);
+    setKakaoMsg("");
+    setSent(false);
+    setSendError("");
+    setDone(false);
     try {
       let fullMsg = "";
-      await callAI(PROMPTS[msgType], null, null, text => { fullMsg += text; setKakaoMsg(fullMsg); }, "카카오", customer.name, customer.age);
+      await callAI(
+        PROMPTS[msgType], null, null,
+        text => { fullMsg += text; setKakaoMsg(fullMsg); },
+        "카카오", customer.name, customer.age
+      );
       setDone(true);
       await supabase.from("visits").update({ kakao_message: fullMsg }).eq("id", latest.id);
     } catch (e) {
-      setKakaoMsg(`⚠️ 오류: ${e.message}`); setDone(true);
+      setKakaoMsg(`⚠️ 오류: ${e.message}`);
+      setDone(true);
     }
     setGenerating(false);
   };
 
+  // ─── 솔라피 알림톡 발송 ───────────────────────────────────────────
+  const sendAlimtalk = async () => {
+    if (!latest) return alert("방문 기록이 없습니다.");
+    if (!customer.phone) return alert("고객 전화번호가 없습니다.");
+
+    setSending(true);
+    setSendError("");
+
+    const reportUrl = `${window.location.origin}/report?phone=${encodeURIComponent(customer.phone)}`;
+
+    try {
+      const res = await fetch("/api/sendAlimtalk", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          customerName: customer.name,
+          phone: customer.phone,
+          sleep: latest.sleep,
+          stress: latest.stress,
+          moisture: latest.moisture,
+          elasticity: latest.elasticity,
+          score: latest.score,
+          stylist: customer.stylist,
+          reportUrl,
+        }),
+      });
+
+      const result = await res.json();
+
+      if (res.ok && result.success) {
+        setSent(true);
+        // 발송 기록 visits 테이블에 저장
+        await supabase
+          .from("visits")
+          .update({ kakao_message: kakaoMsg })
+          .eq("id", latest.id);
+      } else {
+        setSendError(result.error || "알림톡 발송에 실패했습니다.");
+      }
+    } catch (e) {
+      setSendError("네트워크 오류: " + e.message);
+    }
+
+    setSending(false);
+  };
+
   return (
     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+      {/* 왼쪽: 컨트롤 */}
       <Card>
         <h3 style={{ fontSize: 14, fontWeight: 800, marginBottom: 4 }}>💬 카카오톡 발송</h3>
         <p style={{ fontSize: 12, color: C.muted, marginBottom: 16 }}>AI가 고객 데이터 기반으로 메시지를 생성합니다</p>
+
         <div style={{ background: C.goldBg, border: `1px solid ${C.goldLight}`, borderRadius: 10, padding: "12px 16px", marginBottom: 16 }}>
           <div style={{ display: "flex", justifyContent: "space-between" }}>
-            <div><p style={{ fontSize: 13, fontWeight: 800 }}>{customer.name}</p><p style={{ fontSize: 12, color: C.muted }}>{customer.phone}</p></div>
+            <div>
+              <p style={{ fontSize: 13, fontWeight: 800 }}>{customer.name}</p>
+              <p style={{ fontSize: 12, color: C.muted }}>{customer.phone}</p>
+            </div>
             {latest && <Chip score={latest.score} />}
           </div>
         </div>
+
+        {/* 메시지 타입 */}
         <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
-          {TYPES.map(t => <button key={t.id} onClick={() => setMsgType(t.id)} style={{ flex: 1, padding: "9px 6px", border: `1px solid ${msgType === t.id ? C.gold : C.border}`, borderRadius: 9, background: msgType === t.id ? C.goldBg : "#fff", color: msgType === t.id ? C.gold : C.muted, fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>{t.label}</button>)}
+          {TYPES.map(t => (
+            <button key={t.id} onClick={() => setMsgType(t.id)} style={{
+              flex: 1, padding: "9px 6px",
+              border: `1px solid ${msgType === t.id ? C.gold : C.border}`,
+              borderRadius: 9,
+              background: msgType === t.id ? C.goldBg : "#fff",
+              color: msgType === t.id ? C.gold : C.muted,
+              fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
+            }}>{t.label}</button>
+          ))}
         </div>
-        <textarea value={note} onChange={e => setNote(e.target.value)} placeholder="스타일리스트 메모 (선택)..." style={{ width: "100%", height: 60, padding: "8px 12px", border: `1px solid ${C.border}`, borderRadius: 9, fontSize: 12, fontFamily: "inherit", resize: "none", outline: "none", boxSizing: "border-box", marginBottom: 12 }} />
-        <Btn variant="primary" onClick={generate} disabled={generating} full style={{ marginBottom: 10 }}>{generating ? "⚙️ 생성 중..." : "✨ AI 메시지 생성"}</Btn>
-        {kakaoMsg && !sent && <Btn variant="kakao" onClick={() => setSent(true)} full>📨 카카오톡 발송</Btn>}
-        {sent && <div style={{ background: "#edf7f1", border: "1px solid #a8d5b5", borderRadius: 10, padding: "12px 16px", textAlign: "center" }}><p style={{ color: C.green, fontWeight: 800 }}>✅ 발송 완료!</p><p style={{ color: C.sub, fontSize: 12, marginTop: 3 }}>{customer.name}님께 전송됨</p></div>}
+
+        <textarea
+          value={note} onChange={e => setNote(e.target.value)}
+          placeholder="스타일리스트 메모 (선택)..."
+          style={{ width: "100%", height: 60, padding: "8px 12px", border: `1px solid ${C.border}`, borderRadius: 9, fontSize: 12, fontFamily: "inherit", resize: "none", outline: "none", boxSizing: "border-box", marginBottom: 12 }}
+        />
+
+        {/* AI 생성 버튼 */}
+        <Btn variant="primary" onClick={generate} disabled={generating} full style={{ marginBottom: 10 }}>
+          {generating ? "⚙️ 생성 중..." : "✨ AI 메시지 생성"}
+        </Btn>
+
+        {/* 솔라피 발송 버튼 — 메시지 생성 완료 후 표시 */}
+        {kakaoMsg && !sent && (
+          <Btn
+            variant="kakao"
+            onClick={sendAlimtalk}
+            disabled={sending}
+            full
+          >
+            {sending ? "📤 발송 중..." : "📨 카카오 알림톡 발송"}
+          </Btn>
+        )}
+
+        {/* 오류 */}
+        {sendError && (
+          <div style={{ marginTop: 10, background: "#fff0f0", border: "1px solid #f5c0c0", borderRadius: 10, padding: "10px 14px" }}>
+            <p style={{ color: C.red, fontSize: 12, fontWeight: 700 }}>⚠️ 발송 실패</p>
+            <p style={{ color: C.red, fontSize: 11, marginTop: 4 }}>{sendError}</p>
+            <p style={{ color: C.muted, fontSize: 11, marginTop: 4 }}>솔라피 환경변수 또는 템플릿 검수 상태를 확인해주세요.</p>
+          </div>
+        )}
+
+        {/* 발송 완료 */}
+        {sent && (
+          <div style={{ marginTop: 10, background: "#edf7f1", border: "1px solid #a8d5b5", borderRadius: 10, padding: "12px 16px", textAlign: "center" }}>
+            <p style={{ color: C.green, fontWeight: 800 }}>✅ 알림톡 발송 완료!</p>
+            <p style={{ color: C.sub, fontSize: 12, marginTop: 3 }}>{customer.name}님 ({customer.phone}) 전송됨</p>
+            <p style={{ color: C.muted, fontSize: 11, marginTop: 2 }}>리포트 링크가 카카오톡으로 발송됐습니다</p>
+          </div>
+        )}
       </Card>
+
+      {/* 오른쪽: 미리보기 (기존과 동일) */}
       <Card>
         <h3 style={{ fontSize: 14, fontWeight: 800, marginBottom: 16 }}>📱 미리보기</h3>
         <div style={{ maxWidth: 280, margin: "0 auto", background: "#b2c7d8", borderRadius: 20, overflow: "hidden", border: "5px solid #1a1a1a", boxShadow: "0 16px 40px rgba(0,0,0,0.15)" }}>
-          <div style={{ background: "#FEE500", padding: "9px 16px", display: "flex", justifyContent: "space-between" }}><span style={{ fontSize: 12, fontWeight: 800, color: "#3a1d00" }}>카카오톡</span><span style={{ fontSize: 11, color: "#3a1d00" }}>11:32</span></div>
-          <div style={{ background: "#3a1d00", padding: "9px 14px", display: "flex", alignItems: "center", gap: 8 }}><div style={{ width: 26, height: 26, borderRadius: "50%", background: C.kakao, display: "flex", alignItems: "center", justifyContent: "center" }}>✂</div><span style={{ fontSize: 12, fontWeight: 700, color: C.kakao }}>{SHOP.name}</span></div>
+          <div style={{ background: "#FEE500", padding: "9px 16px", display: "flex", justifyContent: "space-between" }}>
+            <span style={{ fontSize: 12, fontWeight: 800, color: "#3a1d00" }}>카카오톡</span>
+            <span style={{ fontSize: 11, color: "#3a1d00" }}>11:32</span>
+          </div>
+          <div style={{ background: "#3a1d00", padding: "9px 14px", display: "flex", alignItems: "center", gap: 8 }}>
+            <div style={{ width: 26, height: 26, borderRadius: "50%", background: C.kakao, display: "flex", alignItems: "center", justifyContent: "center" }}>✂</div>
+            <span style={{ fontSize: 12, fontWeight: 700, color: C.kakao }}>{SHOP.name}</span>
+          </div>
           <div style={{ padding: "14px 10px", minHeight: 220 }}>
             {!kakaoMsg && !generating && <p style={{ textAlign: "center", color: "#666", fontSize: 12, paddingTop: 40 }}>메시지를 생성해주세요</p>}
             {generating && !kakaoMsg && <p style={{ textAlign: "center", color: "#555", fontSize: 12, paddingTop: 40 }}>⚙️ 생성 중...</p>}
             {kakaoMsg && (
               <div>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}><div style={{ width: 28, height: 28, borderRadius: "50%", background: C.kakao, display: "flex", alignItems: "center", justifyContent: "center" }}>✂</div><span style={{ fontSize: 11, fontWeight: 700, color: "#1a1a1a" }}>{SHOP.name}</span></div>
-                <div style={{ background: "#fff", borderRadius: "0 14px 14px 14px", padding: "10px 12px" }}><p style={{ fontSize: 12, color: "#1a1a1a", lineHeight: 1.8, whiteSpace: "pre-wrap" }}>{kakaoMsg}{!done && <span style={{ color: C.gold }}>▋</span>}</p></div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                  <div style={{ width: 28, height: 28, borderRadius: "50%", background: C.kakao, display: "flex", alignItems: "center", justifyContent: "center" }}>✂</div>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: "#1a1a1a" }}>{SHOP.name}</span>
+                </div>
+                <div style={{ background: "#fff", borderRadius: "0 14px 14px 14px", padding: "10px 12px" }}>
+                  <p style={{ fontSize: 12, color: "#1a1a1a", lineHeight: 1.8, whiteSpace: "pre-wrap" }}>
+                    {kakaoMsg}{!done && <span style={{ color: C.gold }}>▋</span>}
+                  </p>
+                </div>
                 {done && <p style={{ fontSize: 10, color: "#999", marginTop: 4 }}>오전 11:32 · 읽음</p>}
               </div>
             )}
           </div>
-          <div style={{ background: "#fff", padding: "7px 10px", display: "flex", gap: 6 }}><div style={{ flex: 1, height: 26, background: "#f5f5f5", borderRadius: 13, fontSize: 11, color: "#aaa", padding: "0 10px", display: "flex", alignItems: "center" }}>메시지 입력</div><div style={{ width: 26, height: 26, background: C.kakao, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12 }}>▶</div></div>
+          <div style={{ background: "#fff", padding: "7px 10px", display: "flex", gap: 6 }}>
+            <div style={{ flex: 1, height: 26, background: "#f5f5f5", borderRadius: 13, fontSize: 11, color: "#aaa", padding: "0 10px", display: "flex", alignItems: "center" }}>메시지 입력</div>
+            <div style={{ width: 26, height: 26, background: C.kakao, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12 }}>▶</div>
+          </div>
         </div>
       </Card>
     </div>
