@@ -282,6 +282,29 @@ function HistoryTab({ customer, onAddVisit }) {
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({ date: new Date().toISOString().slice(0, 10), service: "", sleep: 50, stress: 50, moisture: 50, elasticity: 50, note: "" });
+  useEffect(() => {
+  const loadSurvey = async () => {
+    const { data } = await supabase
+      .from("surveys")
+      .select("*")
+      .eq("phone", customer.phone)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .single();
+    if (data) {
+      const sleepMap = { "5시간 이하": 20, "5~6시간": 40, "6~7시간": 60, "7시간 이상": 80 };
+      const stressVal = data.stress ? (data.stress - 1) * 25 : 50;
+      const condMap = { "나쁨": 30, "보통": 50, "좋음": 80 };
+      setForm(p => ({
+        ...p,
+        sleep: sleepMap[data.sleep] || 50,
+        stress: stressVal,
+        moisture: condMap[data.condition] || 50,
+      }));
+    }
+  };
+  loadSurvey();
+}, []);
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
   const score = f => Math.round(Number(f.sleep) * 0.2 + (100 - Number(f.stress)) * 0.2 + Number(f.moisture) * 0.3 + Number(f.elasticity) * 0.3);
   const visits = Array.isArray(customer.visits) ? customer.visits : [];
