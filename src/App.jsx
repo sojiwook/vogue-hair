@@ -116,7 +116,16 @@ function LoginPage({ onLogin }) {
     </div>
   );
 }
-
+function CustomerList({ customers, onSelect, onAdd, loading }) {
+  const [search, setSearch] = useState("");
+  const list = Array.isArray(customers) ? customers : [];
+  const filtered = list.filter(c => (c.name || "").includes(search) || (c.phone || "").includes(search));
+  return (
+    <div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 }}>
+        <div><h2 style={{ fontSize: 22, fontWeight: 900, marginBottom: 4 }}>고객 관리</h2><p style={{ fontSize: 13, color: C.muted }}>총 {list.length}명</p></div>
+        <Btn variant="gold" onClick={onAdd}>+ 신규 고객 등록</Btn>
+      </div>
     
       <Field value={search} onChange={setSearch} placeholder="🔍 이름 또는 전화번호 검색..." style={{ marginBottom: 16 }} />
       {loading ? <div style={{ textAlign: "center", padding: 60, color: C.muted }}><p style={{ fontSize: 32, marginBottom: 8 }}>⏳</p><p>불러오는 중...</p></div> : (
