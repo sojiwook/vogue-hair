@@ -465,7 +465,7 @@ useEffect(() => {
   );
 }
 
-function CustomerDetail({ customer, onBack, onUpdate }) {
+function CustomerDetail({ customer, onBack, onUpdate, onDeleteCustomer }) {
   const [tab, setTab] = useState("scalp");
   const [kakaoMsg, setKakaoMsg] = useState("");
   const TABS = [{ id: "scalp", label: "🔬 두피 분석" }, { id: "history", label: "📅 방문 히스토리" }, { id: "kakao", label: "💬 카카오 발송" }];
@@ -475,7 +475,7 @@ function CustomerDetail({ customer, onBack, onUpdate }) {
   if (!window.confirm(`${customer.name}님을 삭제할까요? 방문 기록도 모두 삭제됩니다.`)) return;
   await supabase.from("visits").delete().eq("customer_id", customer.id);
   await supabase.from("customers").delete().eq("id", customer.id);
-  onBack();
+  onDeleteCustomer(customer.id);
 };
 
   return (
@@ -541,7 +541,7 @@ export default function App() {
       <div style={{ maxWidth: 980, margin: "0 auto", padding: "28px 24px 60px" }}>
         {page === "list" && <CustomerList customers={customers} onSelect={c => { setSelected(c); setPage("detail"); }} onAdd={() => setPage("add")} loading={loading} />}
         {page === "add" && <AddCustomer onSave={c => { setCustomers(p => [c, ...p]); setPage("list"); }} onCancel={() => setPage("list")} />}
-        {page === "detail" && selected && <CustomerDetail customer={customers.find(c => c.id === selected.id) || selected} onBack={() => setPage("list")} onUpdate={updateCustomer} />}
+    {page === "detail" && selected && <CustomerDetail customer={customers.find(c => c.id === selected.id) || selected} onBack={() => setPage("list")} onUpdate={updateCustomer} onDeleteCustomer={id => { setCustomers(prev => prev.filter(c => c.id !== id)); setPage("list"); }} />}
       </div>
     </div>
   );
