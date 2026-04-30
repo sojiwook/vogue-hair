@@ -471,11 +471,18 @@ function CustomerDetail({ customer, onBack, onUpdate }) {
   const TABS = [{ id: "scalp", label: "🔬 두피 분석" }, { id: "history", label: "📅 방문 히스토리" }, { id: "kakao", label: "💬 카카오 발송" }];
   const visits = Array.isArray(customer.visits) ? customer.visits : [];
   const latest = visits[visits.length - 1];
+  const deleteCustomer = async () => {
+  if (!window.confirm(`${customer.name}님을 삭제할까요? 방문 기록도 모두 삭제됩니다.`)) return;
+  await supabase.from("visits").delete().eq("customer_id", customer.id);
+  await supabase.from("customers").delete().eq("id", customer.id);
+  onBack();
+};
 
   return (
     <div>
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
         <Btn variant="ghost" size="sm" onClick={onBack}>← 목록</Btn>
+        <Btn variant="ghost" size="sm" onClick={deleteCustomer} style={{ color: "#d94f4f", borderColor: "#d94f4f" }}>🗑 삭제</Btn>
         <div style={{ flex: 1 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
             <h2 style={{ fontSize: 20, fontWeight: 900 }}>{customer.name}</h2>
