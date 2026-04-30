@@ -292,9 +292,9 @@ function HistoryTab({ customer, onAddVisit }) {
       .limit(1)
       .single();
     if (data) {
-      const sleepMap = { "5시간 이하": 20, "5~6시간": 40, "6~7시간": 60, "7시간 이상": 80 };
-      const stressVal = data.stress ? (data.stress - 1) * 25 : 50;
-      const condMap = { "나쁨": 30, "보통": 50, "좋음": 80 };
+      const sleepMap = { "5시간 이하": 30, "5~6시간": 50, "6~7시간": 70, "7시간 이상": 85 };
+const stressVal = data.stress ? data.stress * 15 : 50;
+const condMap = { "나쁨": 35, "보통": 55, "좋음": 75 };
       setForm(p => ({
         ...p,
         sleep: sleepMap[data.sleep] || 50,
