@@ -76,11 +76,26 @@ function Spark({ values, color }) {
 }
 
 function LoginPage({ onLogin }) {
-  const [id, setId] = useState("admin");
-  const [pw, setPw] = useState("vogue2026");
+  const [email, setEmail] = useState("");
+  const [pw, setPw] = useState("");
   const [err, setErr] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const login = async () => {
+    if (!email || !pw) return setErr("이메일과 비밀번호를 입력해주세요.");
+    setLoading(true);
+    const { error } = await supabase.auth.signInWithPassword({ email, password: pw });
+    setLoading(false);
+    if (error) { setErr("이메일 또는 비밀번호가 틀렸습니다."); return; }
+    onLogin();
+  };
+
   return (
-    <div style={{ minHeight: "100vh", background: C.bg, display: "flex", alignItems: "center", justifyContent: "center", backgroundImage: "radial-gradient(ellipse 600px 400px at 60% 40%, #f5ede0 0%, transparent 70%)" }}>
+    <div style={{
+      minHeight: "100vh", background: C.bg, display: "flex",
+      alignItems: "center", justifyContent: "center",
+      backgroundImage: "radial-gradient(ellipse 600px 400px at 60% 40%, #f5ede0 0%, transparent 70%)",
+    }}>
       <div style={{ width: 380 }}>
         <div style={{ textAlign: "center", marginBottom: 40 }}>
           <div style={{ width: 56, height: 56, borderRadius: 16, background: C.gold, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 26, margin: "0 auto 16px" }}>✦</div>
@@ -90,26 +105,18 @@ function LoginPage({ onLogin }) {
         </div>
         <Card style={{ boxShadow: "0 8px 40px rgba(0,0,0,0.08)" }}>
           <h2 style={{ fontSize: 16, fontWeight: 800, marginBottom: 20 }}>스타일리스트 로그인</h2>
-          <Field label="아이디" value={id} onChange={setId} placeholder="admin" style={{ marginBottom: 12 }} />
-          <Field label="비밀번호" value={pw} onChange={setPw} type="password" style={{ marginBottom: 8 }} />
+          <Field label="이메일" value={email} onChange={setEmail} placeholder="이메일 입력" style={{ marginBottom: 12 }} />
+          <Field label="비밀번호" value={pw} onChange={setPw} type="password" placeholder="비밀번호 입력" style={{ marginBottom: 8 }} />
           {err && <p style={{ fontSize: 12, color: C.red, marginBottom: 10 }}>⚠ {err}</p>}
-          <p style={{ fontSize: 11, color: C.muted, marginBottom: 16 }}>테스트: admin / vogue2026</p>
-          <Btn variant="gold" size="lg" full onClick={() => { if (id === "admin" && pw === "vogue2026") onLogin(); else setErr("아이디 또는 비밀번호를 확인해주세요."); }}>로그인 →</Btn>
+          <Btn variant="gold" size="lg" full onClick={login} disabled={loading}>
+            {loading ? "로그인 중..." : "로그인 →"}
+          </Btn>
         </Card>
       </div>
     </div>
   );
 }
 
-function CustomerList({ customers, onSelect, onAdd, loading }) {
-  const [search, setSearch] = useState("");
-  const list = Array.isArray(customers) ? customers : [];
-  const filtered = list.filter(c => (c.name || "").includes(search) || (c.phone || "").includes(search));
-  return (
-    <div>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 }}>
-        <div><h2 style={{ fontSize: 22, fontWeight: 900, marginBottom: 4 }}>고객 관리</h2><p style={{ fontSize: 13, color: C.muted }}>총 {list.length}명</p></div>
-        <Btn variant="gold" onClick={onAdd}>+ 신규 고객 등록</Btn>
       </div>
       <Field value={search} onChange={setSearch} placeholder="🔍 이름 또는 전화번호 검색..." style={{ marginBottom: 16 }} />
       {loading ? <div style={{ textAlign: "center", padding: 60, color: C.muted }}><p style={{ fontSize: 32, marginBottom: 8 }}>⏳</p><p>불러오는 중...</p></div> : (
