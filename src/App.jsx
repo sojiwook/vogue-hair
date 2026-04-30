@@ -117,7 +117,7 @@ function LoginPage({ onLogin }) {
   );
 }
 
-      </div>
+    
       <Field value={search} onChange={setSearch} placeholder="🔍 이름 또는 전화번호 검색..." style={{ marginBottom: 16 }} />
       {loading ? <div style={{ textAlign: "center", padding: 60, color: C.muted }}><p style={{ fontSize: 32, marginBottom: 8 }}>⏳</p><p>불러오는 중...</p></div> : (
         <div style={{ display: "grid", gap: 10 }}>
