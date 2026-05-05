@@ -294,53 +294,117 @@ function ScalpTab({ customer }) {
   );
 }
 
+// HistoryTab 함수 전체 교체
+// 변경사항:
+// 1. 방문 기록 카드 접었다 폈다 (기본: 접힌 상태)
+// 2. 펼치면 "📋 리포트 확인" 버튼 표시
+// 3. 최근 방문은 기본으로 펼쳐져 있음
+
 function HistoryTab({ customer, onAddVisit }) {
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({ date: new Date().toISOString().slice(0, 10), service: "", sleep: 50, stress: 50, moisture: 50, elasticity: 50, note: "" });
-  useEffect(() => {
-  const loadSurvey = async () => {
-    const { data } = await supabase
-      .from("surveys")
-      .select("*")
-      .eq("phone", customer.phone)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .single();
-    if (data) {
-      const sleepMap = { "5시간 이하": 30, "5~6시간": 50, "6~7시간": 70, "7시간 이상": 85 };
-const stressVal = data.stress ? data.stress * 15 : 50;
-const condMap = { "나쁨": 35, "보통": 55, "좋음": 75 };
-      setForm(p => ({
-        ...p,
-        sleep: sleepMap[data.sleep] || 50,
-        stress: stressVal,
-        moisture: condMap[data.condition] || 50,
-      }));
-    }
-  };
-  loadSurvey();
-}, []);
-  const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
-  const score = f => Math.round(Number(f.sleep) * 0.2 + (100 - Number(f.stress)) * 0.2 + Number(f.moisture) * 0.3 + Number(f.elasticity) * 0.3);
+  const [expandedIds, setExpandedIds] = useState([]); // 펼쳐진 카드 ID 목록
+  const [form, setForm] = useState({
+    date: new Date().toISOString().slice(0, 10),
+    service: "", sleep: 50, stress: 50, moisture: 50, elasticity: 50, note: ""
+  });
+
   const visits = Array.isArray(customer.visits) ? customer.visits : [];
-  const meta = { sleep: { label: "수면 품질", color: C.blue }, stress: { label: "스트레스", color: C.red }, moisture: { label: "두피 수분", color: C.gold }, elasticity: { label: "모발 탄력", color: C.green }, score: { label: "종합 점수", color: C.text } };
+  const reversedVisits = [...visits].reverse(); // 최근 방문이 위로
+
+  // 최근 방문(첫 번째)은 기본으로 펼쳐져 있게
+  useEffect(() => {
+    if (reversedVisits.length > 0) {
+      setExpandedIds([reversedVisits[0].id]);
+    }
+  }, [visits.length]);
+
+  useEffect(() => {
+    const loadSurvey = async () => {
+      const { data } = await supabase
+        .from("surveys")
+        .select("*")
+        .eq("phone", customer.phone)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .single();
+      if (data) {
+        const sleepMap = { "5시간 이하": 30, "5~6시간": 50, "6~7시간": 70, "7시간 이상": 85 };
+        const stressVal = data.stress ? data.stress * 15 : 50;
+        const condMap = { "나쁨": 35, "보통": 55, "좋음": 75 };
+        setForm(p => ({
+          ...p,
+          sleep: sleepMap[data.sleep] || 50,
+          stress: stressVal,
+          moisture: condMap[data.condition] || 50,
+        }));
+      }
+    };
+    loadSurvey();
+  }, []);
+
+  const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
+  const score = f => Math.round(
+    Number(f.sleep) * 0.2 +
+    (100 - Number(f.stress)) * 0.2 +
+    Number(f.moisture) * 0.3 +
+    Number(f.elasticity) * 0.3
+  );
+
+  const meta = {
+    sleep: { label: "수면 품질", color: C.blue },
+    stress: { label: "스트레스", color: C.red },
+    moisture: { label: "두피 수분", color: C.gold },
+    elasticity: { label: "모발 탄력", color: C.green },
+    score: { label: "종합 점수", color: C.text }
+  };
+
+  const toggleExpand = (id) => {
+    setExpandedIds(prev =>
+      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+    );
+  };
+
+  const openReport = (phone) => {
+    const url = `${window.location.origin}/report?phone=${encodeURIComponent(phone)}`;
+    window.open(url, "_blank");
+  };
 
   const save = async () => {
     setSaving(true);
-    const { data, error } = await supabase.from("visits").insert({ customer_id: customer.id, date: form.date, service: form.service, sleep: Number(form.sleep), stress: Number(form.stress), moisture: Number(form.moisture), elasticity: Number(form.elasticity), score: score(form), note: form.note }).select().single();
+    const { data, error } = await supabase
+      .from("visits")
+      .insert({
+        customer_id: customer.id,
+        date: form.date,
+        service: form.service,
+        sleep: Number(form.sleep),
+        stress: Number(form.stress),
+        moisture: Number(form.moisture),
+        elasticity: Number(form.elasticity),
+        score: score(form),
+        note: form.note
+      })
+      .select()
+      .single();
     setSaving(false);
     if (error) { alert("저장 실패: " + error.message); return; }
     onAddVisit(data);
     setShowForm(false);
+    // 새로 추가된 방문 기록 자동으로 펼치기
+    setExpandedIds([data.id]);
   };
 
   return (
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
         <h3 style={{ fontSize: 15, fontWeight: 800 }}>📅 방문 기록 ({visits.length}회)</h3>
-        <Btn variant="gold" size="sm" onClick={() => setShowForm(!showForm)}>{showForm ? "✕ 닫기" : "+ 방문 추가"}</Btn>
+        <Btn variant="gold" size="sm" onClick={() => setShowForm(!showForm)}>
+          {showForm ? "✕ 닫기" : "+ 방문 추가"}
+        </Btn>
       </div>
+
+      {/* 방문 추가 폼 */}
       {showForm && (
         <Card style={{ marginBottom: 16, background: C.goldBg, border: `1px solid ${C.goldLight}` }}>
           <h4 style={{ fontSize: 13, fontWeight: 800, marginBottom: 14 }}>새 방문 기록</h4>
@@ -351,18 +415,27 @@ const condMap = { "나쁨": 35, "보통": 55, "좋음": 75 };
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>
             {["sleep", "stress", "moisture", "elasticity"].map(k => (
               <div key={k}>
-                <label style={{ fontSize: 12, color: C.sub, fontWeight: 600, display: "flex", justifyContent: "space-between", marginBottom: 4 }}><span>{meta[k].label}</span><span style={{ color: meta[k].color, fontWeight: 800 }}>{form[k]}</span></label>
-                <input type="range" min={0} max={100} value={form[k]} onChange={e => set(k, e.target.value)} style={{ width: "100%", accentColor: meta[k].color }} />
+                <label style={{ fontSize: 12, color: C.sub, fontWeight: 600, display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                  <span>{meta[k].label}</span>
+                  <span style={{ color: meta[k].color, fontWeight: 800 }}>{form[k]}</span>
+                </label>
+                <input type="range" min={0} max={100} value={form[k]}
+                  onChange={e => set(k, e.target.value)}
+                  style={{ width: "100%", accentColor: meta[k].color }} />
               </div>
             ))}
           </div>
-          <textarea value={form.note} onChange={e => set("note", e.target.value)} placeholder="스타일리스트 메모..." style={{ width: "100%", height: 60, padding: "8px 12px", border: `1px solid ${C.border}`, borderRadius: 9, fontSize: 13, fontFamily: "inherit", resize: "none", outline: "none", boxSizing: "border-box", marginBottom: 12 }} />
+          <textarea value={form.note} onChange={e => set("note", e.target.value)}
+            placeholder="스타일리스트 메모..."
+            style={{ width: "100%", height: 60, padding: "8px 12px", border: `1px solid ${C.border}`, borderRadius: 9, fontSize: 13, fontFamily: "inherit", resize: "none", outline: "none", boxSizing: "border-box", marginBottom: 12 }} />
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <p style={{ fontSize: 13, color: C.sub }}>예상 점수: <strong style={{ color: C.gold, fontSize: 18 }}>{score(form)}점</strong></p>
             <Btn variant="gold" size="sm" onClick={save} disabled={saving}>{saving ? "저장 중..." : "저장"}</Btn>
           </div>
         </Card>
       )}
+
+      {/* 트렌드 차트 */}
       {visits.length >= 2 && (
         <Card style={{ marginBottom: 16 }}>
           <h4 style={{ fontSize: 13, fontWeight: 800, marginBottom: 14 }}>📊 지표 트렌드</h4>
@@ -371,103 +444,142 @@ const condMap = { "나쁨": 35, "보통": 55, "좋음": 75 };
               const vals = visits.map(v => v[k]);
               const last = vals[vals.length - 1];
               const d = vals.length >= 2 ? last - vals[vals.length - 2] : null;
-              return <div key={k} style={{ background: C.bg, borderRadius: 10, padding: "10px 12px", textAlign: "center" }}><Spark values={vals} color={meta[k].color} /><p style={{ fontSize: 20, fontWeight: 800, color: meta[k].color, marginTop: 4 }}>{last}</p>{d !== null && <p style={{ fontSize: 10, color: d >= 0 ? C.green : C.red }}>{d >= 0 ? "▲" : "▼"}{Math.abs(d)}</p>}<p style={{ fontSize: 10, color: C.muted, marginTop: 2 }}>{meta[k].label}</p></div>;
+              return (
+                <div key={k} style={{ background: C.bg, borderRadius: 10, padding: "10px 12px", textAlign: "center" }}>
+                  <Spark values={vals} color={meta[k].color} />
+                  <p style={{ fontSize: 20, fontWeight: 800, color: meta[k].color, marginTop: 4 }}>{last}</p>
+                  {d !== null && <p style={{ fontSize: 10, color: d >= 0 ? C.green : C.red }}>{d >= 0 ? "▲" : "▼"}{Math.abs(d)}</p>}
+                  <p style={{ fontSize: 10, color: C.muted, marginTop: 2 }}>{meta[k].label}</p>
+                </div>
+              );
             })}
           </div>
         </Card>
       )}
+
+      {/* 방문 기록 카드 목록 */}
       <div style={{ display: "grid", gap: 10 }}>
-        {[...visits].reverse().map((v, i) => (
-          <Card key={i} style={{ padding: "16px 20px" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
-              <div>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}><span style={{ fontSize: 14, fontWeight: 800 }}>{v.date}</span>{i === 0 && <span style={{ fontSize: 10, background: C.goldBg, color: C.gold, border: `1px solid ${C.goldLight}`, padding: "2px 8px", borderRadius: 99, fontWeight: 700 }}>최근</span>}</div>
-                <p style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>{v.service}</p>
+        {reversedVisits.map((v, i) => {
+          const isExpanded = expandedIds.includes(v.id);
+          const isLatest = i === 0;
+
+          return (
+            <Card key={v.id} style={{ padding: 0, overflow: "hidden" }}>
+
+              {/* 카드 헤더 — 항상 보임 / 클릭하면 접었다 폈다 */}
+              <div
+                onClick={() => toggleExpand(v.id)}
+                style={{
+                  display: "flex", justifyContent: "space-between", alignItems: "center",
+                  padding: "14px 20px", cursor: "pointer",
+                  background: isExpanded ? C.goldBg : "#fff",
+                  borderBottom: isExpanded ? `1px solid ${C.goldLight}` : "none",
+                  transition: "background 0.2s",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <span style={{ fontSize: 14, fontWeight: 800 }}>{v.date}</span>
+                  {isLatest && (
+                    <span style={{ fontSize: 10, background: C.goldBg, color: C.gold, border: `1px solid ${C.goldLight}`, padding: "2px 8px", borderRadius: 99, fontWeight: 700 }}>최근</span>
+                  )}
+                  {v.service && <span style={{ fontSize: 12, color: C.muted }}>{v.service}</span>}
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <Chip score={v.score} />
+                  <span style={{ color: C.muted, fontSize: 14, transition: "transform 0.2s", display: "inline-block", transform: isExpanded ? "rotate(90deg)" : "rotate(0deg)" }}>›</span>
+                </div>
               </div>
-              <Chip score={v.score} />
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 10, marginBottom: v.note ? 10 : 0 }}>
-              {["sleep", "stress", "moisture", "elasticity"].map(k => <div key={k}><p style={{ fontSize: 10, color: C.muted, marginBottom: 4 }}>{meta[k].label}</p><Bar value={v[k]} color={meta[k].color} /><p style={{ fontSize: 11, fontWeight: 700, color: meta[k].color, marginTop: 2 }}>{v[k]}</p></div>)}
-            </div>
-            {v.note && <p style={{ fontSize: 12, color: C.sub, background: C.bg, padding: "8px 12px", borderRadius: 8 }}>📝 {v.note}</p>}
-            {v.scalp_report && (
-              <div style={{ marginTop: 10, background: "#f8f6f2", borderRadius: 8, padding: "10px 14px" }}>
-                <p style={{ fontSize: 11, fontWeight: 800, color: C.gold, marginBottom: 6 }}>🔬 두피 분석 결과</p>
-                <p style={{ fontSize: 12, color: C.sub, lineHeight: 1.8, whiteSpace: "pre-wrap" }}>{v.scalp_report}</p>
-              </div>
-            )}
-          </Card>
-        ))}
-        {visits.length === 0 && <div style={{ textAlign: "center", padding: 40, color: C.muted }}>아직 방문 기록이 없습니다.</div>}
+
+              {/* 카드 상세 — 펼쳤을 때만 보임 */}
+              {isExpanded && (
+                <div style={{ padding: "16px 20px" }}>
+
+                  {/* 지표 바 */}
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 10, marginBottom: 16 }}>
+                    {["sleep", "stress", "moisture", "elasticity"].map(k => (
+                      <div key={k}>
+                        <p style={{ fontSize: 10, color: C.muted, marginBottom: 4 }}>{meta[k].label}</p>
+                        <Bar value={v[k]} color={meta[k].color} />
+                        <p style={{ fontSize: 11, fontWeight: 700, color: meta[k].color, marginTop: 2 }}>{v[k]}</p>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* 메모 */}
+                  {v.note && (
+                    <p style={{ fontSize: 12, color: C.sub, background: C.bg, padding: "8px 12px", borderRadius: 8, marginBottom: 12 }}>
+                      📝 {v.note}
+                    </p>
+                  )}
+
+                  {/* 두피 분석 결과 */}
+                  {v.scalp_report && (
+                    <div style={{ background: C.bg, borderRadius: 8, padding: "10px 14px", marginBottom: 12 }}>
+                      <p style={{ fontSize: 11, fontWeight: 800, color: C.gold, marginBottom: 6 }}>🔬 두피 분석 결과</p>
+                      <p style={{ fontSize: 12, color: C.sub, lineHeight: 1.8, whiteSpace: "pre-wrap" }}>{v.scalp_report}</p>
+                    </div>
+                  )}
+
+                  {/* 리포트 확인 버튼 */}
+                  <button
+                    onClick={() => openReport(customer.phone)}
+                    style={{
+                      width: "100%", padding: "11px", borderRadius: 10,
+                      border: `1.5px solid ${C.gold}`,
+                      background: "#fff", color: C.gold,
+                      fontSize: 13, fontWeight: 800, fontFamily: "inherit",
+                      cursor: "pointer", display: "flex", alignItems: "center",
+                      justifyContent: "center", gap: 6,
+                      transition: "all 0.18s",
+                    }}
+                    onMouseEnter={e => { e.currentTarget.style.background = C.goldBg; }}
+                    onMouseLeave={e => { e.currentTarget.style.background = "#fff"; }}
+                  >
+                    📋 리포트 확인
+                  </button>
+                </div>
+              )}
+            </Card>
+          );
+        })}
+
+        {visits.length === 0 && (
+          <div style={{ textAlign: "center", padding: 40, color: C.muted }}>
+            아직 방문 기록이 없습니다.
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
-// App.jsx 안의 KakaoTab 함수만 교체하세요
-// 📨 카카오톡 발송 버튼 → 솔라피 알림톡 실제 발송
+// KakaoTab 전체 교체 (556번 ~ 768번 줄 대체)
 
-function KakaoTab({ customer, kakaoMsg, setKakaoMsg }) {
-  const [msgType, setMsgType] = useState("full");
-  const [note, setNote] = useState("");
-  const [generating, setGenerating] = useState(false);
-  const [sending, setSending] = useState(false);   // ← 추가
-  const [sent, setSent] = useState(false);
-  const [done, setDone] = useState(false);
-  const [sendError, setSendError] = useState("");  // ← 추가
-
+function KakaoTab({ customer }) {
   const visits = Array.isArray(customer.visits) ? customer.visits : [];
-  const latest = visits[visits.length - 1];
+  const reversedVisits = [...visits].reverse(); // 최근 방문이 위로
 
-  useEffect(() => {
-    if (latest?.kakao_message && !kakaoMsg) {
-      setKakaoMsg(latest.kakao_message);
-      setDone(true);
-    }
-  }, []);
+  const [selectedVisitId, setSelectedVisitId] = useState(
+    reversedVisits[0]?.id ?? null
+  );
+  const [sending, setSending] = useState(false);
+  const [sent, setSent] = useState(false);
+  const [sendError, setSendError] = useState("");
 
-  const TYPES = [
-    { id: "full", label: "📊 종합 리포트" },
-    { id: "simple", label: "💬 간단 감사" },
-    { id: "product", label: "🧴 제품 추천" },
-  ];
+  const selectedVisit = visits.find(v => v.id === selectedVisitId) ?? null;
 
-  const PROMPTS = {
-    full: `헤어샵 방문 고객 카카오톡 메시지. 친근하고 따뜻한 톤, 이모지, 500자 이내, 마케팅 느낌 없이.\n헤어샵: ${SHOP.name} / 고객: ${customer.name}님 / 담당: ${customer.stylist} / 방문일: ${latest?.date} / 종합점수: ${latest?.score}/100 / 수면: ${latest?.sleep} / 스트레스: ${latest?.stress} / 두피수분: ${latest?.moisture} / 탄력: ${latest?.elasticity} / 시술: ${latest?.service}${note ? ` / 메모: ${note}` : ""}${latest?.scalp_report ? `\n\n두피 분석 결과:\n${latest.scalp_report.slice(0, 500)}` : ""}\n형식: 인사+방문감사 → 두피분석 결과 핵심 요약 → 맞춤 케어팁 1~2가지 → 자연스러운 다음방문 권유 → 마무리`,
-    simple: `카카오톡 감사 메시지 200자 이내. ${SHOP.name} / ${customer.name}님 / ${latest?.score}점 / 홈케어팁 1가지 / 이모지 2~3개`,
-    product: `두피 상태 기반 제품 추천 카카오톡. 300자 이내. 강매 없이.\n${customer.name}님 / 수분${latest?.moisture} / 탄력${latest?.elasticity} / 제품 카테고리 2~3가지 + 성분 키워드`,
+  const openReport = () => {
+    const url = `${window.location.origin}/report?phone=${encodeURIComponent(customer.phone)}`;
+    window.open(url, "_blank");
   };
 
-  const generate = async () => {
-    if (!latest) return alert("방문 기록을 먼저 추가해주세요.");
-    setGenerating(true);
-    setKakaoMsg("");
-    setSent(false);
-    setSendError("");
-    setDone(false);
-    try {
-      let fullMsg = "";
-      await callAI(
-        PROMPTS[msgType], null, null,
-        text => { fullMsg += text; setKakaoMsg(fullMsg); },
-        "카카오", customer.name, customer.age
-      );
-      setDone(true);
-      await supabase.from("visits").update({ kakao_message: fullMsg }).eq("id", latest.id);
-    } catch (e) {
-      setKakaoMsg(`⚠️ 오류: ${e.message}`);
-      setDone(true);
-    }
-    setGenerating(false);
-  };
-
-  // ─── 솔라피 알림톡 발송 ───────────────────────────────────────────
   const sendAlimtalk = async () => {
-    if (!latest) return alert("방문 기록이 없습니다.");
+    if (!selectedVisit) return alert("방문 기록을 선택해주세요.");
     if (!customer.phone) return alert("고객 전화번호가 없습니다.");
 
     setSending(true);
     setSendError("");
+    setSent(false);
 
     const reportUrl = `${window.location.origin}/report?phone=${encodeURIComponent(customer.phone)}`;
 
@@ -478,11 +590,11 @@ function KakaoTab({ customer, kakaoMsg, setKakaoMsg }) {
         body: JSON.stringify({
           customerName: customer.name,
           phone: customer.phone,
-          sleep: latest.sleep,
-          stress: latest.stress,
-          moisture: latest.moisture,
-          elasticity: latest.elasticity,
-          score: latest.score,
+          sleep: selectedVisit.sleep,
+          stress: selectedVisit.stress,
+          moisture: selectedVisit.moisture,
+          elasticity: selectedVisit.elasticity,
+          score: selectedVisit.score,
           stylist: customer.stylist,
           reportUrl,
         }),
@@ -492,11 +604,6 @@ function KakaoTab({ customer, kakaoMsg, setKakaoMsg }) {
 
       if (res.ok && result.success) {
         setSent(true);
-        // 발송 기록 visits 테이블에 저장
-        await supabase
-          .from("visits")
-          .update({ kakao_message: kakaoMsg })
-          .eq("id", latest.id);
       } else {
         setSendError(result.error || "알림톡 발송에 실패했습니다.");
       }
@@ -507,114 +614,211 @@ function KakaoTab({ customer, kakaoMsg, setKakaoMsg }) {
     setSending(false);
   };
 
+  const meta = {
+    sleep: { label: "수면 품질", color: C.blue },
+    stress: { label: "스트레스", color: C.red },
+    moisture: { label: "두피 수분", color: C.gold },
+    elasticity: { label: "모발 탄력", color: C.green },
+  };
+
+  if (visits.length === 0) {
+    return (
+      <Card>
+        <div style={{ textAlign: "center", padding: "40px 0", color: C.muted }}>
+          <p style={{ fontSize: 32, marginBottom: 8 }}>📋</p>
+          <p style={{ fontSize: 14 }}>방문 기록을 먼저 추가해주세요.</p>
+        </div>
+      </Card>
+    );
+  }
+
   return (
     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+
       {/* 왼쪽: 컨트롤 */}
-      <Card>
-        <h3 style={{ fontSize: 14, fontWeight: 800, marginBottom: 4 }}>💬 카카오톡 발송</h3>
-        <p style={{ fontSize: 12, color: C.muted, marginBottom: 16 }}>AI가 고객 데이터 기반으로 메시지를 생성합니다</p>
+      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
 
-        <div style={{ background: C.goldBg, border: `1px solid ${C.goldLight}`, borderRadius: 10, padding: "12px 16px", marginBottom: 16 }}>
-          <div style={{ display: "flex", justifyContent: "space-between" }}>
-            <div>
-              <p style={{ fontSize: 13, fontWeight: 800 }}>{customer.name}</p>
-              <p style={{ fontSize: 12, color: C.muted }}>{customer.phone}</p>
+        {/* 방문 날짜 선택 */}
+        <Card>
+          <h3 style={{ fontSize: 14, fontWeight: 800, marginBottom: 12 }}>📅 방문 날짜 선택</h3>
+          <select
+            value={selectedVisitId ?? ""}
+            onChange={e => {
+              setSelectedVisitId(Number(e.target.value));
+              setSent(false);
+              setSendError("");
+            }}
+            style={{
+              width: "100%", padding: "11px 14px",
+              border: `1.5px solid ${C.gold}`, borderRadius: 10,
+              fontSize: 14, fontFamily: "inherit", fontWeight: 700,
+              color: C.text, background: C.goldBg, outline: "none",
+              cursor: "pointer",
+            }}
+          >
+            {reversedVisits.map((v, i) => (
+              <option key={v.id} value={v.id}>
+                {v.date} · {v.score}점 {i === 0 ? "(최근)" : ""}
+              </option>
+            ))}
+          </select>
+        </Card>
+
+        {/* 선택한 방문 요약 */}
+        {selectedVisit && (
+          <Card>
+            <h3 style={{ fontSize: 14, fontWeight: 800, marginBottom: 14 }}>📊 방문 요약</h3>
+
+            {/* 점수 */}
+            <div style={{ textAlign: "center", marginBottom: 16 }}>
+              <p style={{ fontSize: 36, fontWeight: 900, color: selectedVisit.score >= 70 ? C.green : selectedVisit.score >= 50 ? "#b07800" : C.red }}>
+                {selectedVisit.score}점
+              </p>
+              <p style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>{selectedVisit.date} · {selectedVisit.service || "두피 케어"}</p>
             </div>
-            {latest && <Chip score={latest.score} />}
+
+            {/* 지표 */}
+            <div style={{ display: "grid", gap: 10 }}>
+              {["sleep", "stress", "moisture", "elasticity"].map(k => (
+                <div key={k}>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                    <span style={{ fontSize: 12, color: C.sub }}>{meta[k].label}</span>
+                    <span style={{ fontSize: 12, fontWeight: 800, color: meta[k].color }}>{selectedVisit[k]}</span>
+                  </div>
+                  <Bar value={selectedVisit[k]} color={meta[k].color} />
+                </div>
+              ))}
+            </div>
+          </Card>
+        )}
+
+        {/* 버튼들 */}
+        <Card>
+          <h3 style={{ fontSize: 14, fontWeight: 800, marginBottom: 12 }}>📨 발송</h3>
+
+          {/* 고객 정보 */}
+          <div style={{ background: C.goldBg, border: `1px solid ${C.goldLight}`, borderRadius: 10, padding: "12px 16px", marginBottom: 14 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div>
+                <p style={{ fontSize: 13, fontWeight: 800 }}>{customer.name}</p>
+                <p style={{ fontSize: 12, color: C.muted }}>{customer.phone}</p>
+              </div>
+              {selectedVisit && <Chip score={selectedVisit.score} />}
+            </div>
           </div>
-        </div>
 
-        {/* 메시지 타입 */}
-        <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
-          {TYPES.map(t => (
-            <button key={t.id} onClick={() => setMsgType(t.id)} style={{
-              flex: 1, padding: "9px 6px",
-              border: `1px solid ${msgType === t.id ? C.gold : C.border}`,
-              borderRadius: 9,
-              background: msgType === t.id ? C.goldBg : "#fff",
-              color: msgType === t.id ? C.gold : C.muted,
-              fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
-            }}>{t.label}</button>
-          ))}
-        </div>
+          {/* 리포트 확인 버튼 */}
+          <button
+            onClick={openReport}
+            style={{
+              width: "100%", padding: "12px", borderRadius: 10, marginBottom: 10,
+              border: `1.5px solid ${C.gold}`, background: "#fff",
+              color: C.gold, fontSize: 13, fontWeight: 800,
+              fontFamily: "inherit", cursor: "pointer",
+              display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+            }}
+            onMouseEnter={e => e.currentTarget.style.background = C.goldBg}
+            onMouseLeave={e => e.currentTarget.style.background = "#fff"}
+          >
+            📋 리포트 확인 (새탭)
+          </button>
 
-        <textarea
-          value={note} onChange={e => setNote(e.target.value)}
-          placeholder="스타일리스트 메모 (선택)..."
-          style={{ width: "100%", height: 60, padding: "8px 12px", border: `1px solid ${C.border}`, borderRadius: 9, fontSize: 12, fontFamily: "inherit", resize: "none", outline: "none", boxSizing: "border-box", marginBottom: 12 }}
-        />
-
-        {/* AI 생성 버튼 */}
-        <Btn variant="primary" onClick={generate} disabled={generating} full style={{ marginBottom: 10 }}>
-          {generating ? "⚙️ 생성 중..." : "✨ AI 메시지 생성"}
-        </Btn>
-
-        {/* 솔라피 발송 버튼 — 메시지 생성 완료 후 표시 */}
-        {kakaoMsg && !sent && (
-          <Btn
-            variant="kakao"
+          {/* 알림톡 발송 버튼 */}
+          <button
             onClick={sendAlimtalk}
-            disabled={sending}
-            full
+            disabled={sending || !selectedVisit}
+            style={{
+              width: "100%", padding: "12px", borderRadius: 10,
+              border: "none", background: sending ? C.border : C.kakao,
+              color: "#3a1d00", fontSize: 13, fontWeight: 800,
+              fontFamily: "inherit", cursor: sending ? "not-allowed" : "pointer",
+              display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+              opacity: sending ? 0.7 : 1,
+            }}
           >
             {sending ? "📤 발송 중..." : "📨 카카오 알림톡 발송"}
-          </Btn>
-        )}
+          </button>
 
-        {/* 오류 */}
-        {sendError && (
-          <div style={{ marginTop: 10, background: "#fff0f0", border: "1px solid #f5c0c0", borderRadius: 10, padding: "10px 14px" }}>
-            <p style={{ color: C.red, fontSize: 12, fontWeight: 700 }}>⚠️ 발송 실패</p>
-            <p style={{ color: C.red, fontSize: 11, marginTop: 4 }}>{sendError}</p>
-            <p style={{ color: C.muted, fontSize: 11, marginTop: 4 }}>솔라피 환경변수 또는 템플릿 검수 상태를 확인해주세요.</p>
-          </div>
-        )}
+          {/* 성공 */}
+          {sent && (
+            <div style={{ marginTop: 12, background: "#edf7f1", border: "1px solid #a8d5b5", borderRadius: 10, padding: "12px 16px", textAlign: "center" }}>
+              <p style={{ color: C.green, fontWeight: 800 }}>✅ 알림톡 발송 완료!</p>
+              <p style={{ color: C.sub, fontSize: 12, marginTop: 3 }}>{customer.name}님께 리포트 링크 전송됨</p>
+            </div>
+          )}
 
-        {/* 발송 완료 */}
-        {sent && (
-          <div style={{ marginTop: 10, background: "#edf7f1", border: "1px solid #a8d5b5", borderRadius: 10, padding: "12px 16px", textAlign: "center" }}>
-            <p style={{ color: C.green, fontWeight: 800 }}>✅ 알림톡 발송 완료!</p>
-            <p style={{ color: C.sub, fontSize: 12, marginTop: 3 }}>{customer.name}님 ({customer.phone}) 전송됨</p>
-            <p style={{ color: C.muted, fontSize: 11, marginTop: 2 }}>리포트 링크가 카카오톡으로 발송됐습니다</p>
-          </div>
-        )}
-      </Card>
+          {/* 오류 */}
+          {sendError && (
+            <div style={{ marginTop: 12, background: "#fff0f0", border: "1px solid #f5c0c0", borderRadius: 10, padding: "12px 16px" }}>
+              <p style={{ color: C.red, fontSize: 12, fontWeight: 700 }}>⚠️ 발송 실패</p>
+              <p style={{ color: C.red, fontSize: 11, marginTop: 4 }}>{sendError}</p>
+            </div>
+          )}
+        </Card>
+      </div>
 
-      {/* 오른쪽: 미리보기 (기존과 동일) */}
+      {/* 오른쪽: 리포트 미리보기 */}
       <Card>
-        <h3 style={{ fontSize: 14, fontWeight: 800, marginBottom: 16 }}>📱 미리보기</h3>
-        <div style={{ maxWidth: 280, margin: "0 auto", background: "#b2c7d8", borderRadius: 20, overflow: "hidden", border: "5px solid #1a1a1a", boxShadow: "0 16px 40px rgba(0,0,0,0.15)" }}>
-          <div style={{ background: "#FEE500", padding: "9px 16px", display: "flex", justifyContent: "space-between" }}>
-            <span style={{ fontSize: 12, fontWeight: 800, color: "#3a1d00" }}>카카오톡</span>
-            <span style={{ fontSize: 11, color: "#3a1d00" }}>11:32</span>
-          </div>
-          <div style={{ background: "#3a1d00", padding: "9px 14px", display: "flex", alignItems: "center", gap: 8 }}>
-            <div style={{ width: 26, height: 26, borderRadius: "50%", background: C.kakao, display: "flex", alignItems: "center", justifyContent: "center" }}>✂</div>
-            <span style={{ fontSize: 12, fontWeight: 700, color: C.kakao }}>{SHOP.name}</span>
-          </div>
-          <div style={{ padding: "14px 10px", minHeight: 220 }}>
-            {!kakaoMsg && !generating && <p style={{ textAlign: "center", color: "#666", fontSize: 12, paddingTop: 40 }}>메시지를 생성해주세요</p>}
-            {generating && !kakaoMsg && <p style={{ textAlign: "center", color: "#555", fontSize: 12, paddingTop: 40 }}>⚙️ 생성 중...</p>}
-            {kakaoMsg && (
-              <div>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-                  <div style={{ width: 28, height: 28, borderRadius: "50%", background: C.kakao, display: "flex", alignItems: "center", justifyContent: "center" }}>✂</div>
-                  <span style={{ fontSize: 11, fontWeight: 700, color: "#1a1a1a" }}>{SHOP.name}</span>
+        <h3 style={{ fontSize: 14, fontWeight: 800, marginBottom: 16 }}>📱 리포트 미리보기</h3>
+
+        {selectedVisit ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+
+            {/* 고객명 + 점수 */}
+            <div style={{ background: C.goldBg, border: `1px solid ${C.goldLight}`, borderRadius: 12, padding: "16px", textAlign: "center" }}>
+              <p style={{ fontSize: 18, fontWeight: 900 }}>{customer.name}님</p>
+              <p style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>{selectedVisit.date} · {customer.stylist} 스타일리스트</p>
+              <p style={{
+                fontSize: 32, fontWeight: 900, marginTop: 10,
+                color: selectedVisit.score >= 70 ? C.green : selectedVisit.score >= 50 ? "#b07800" : C.red
+              }}>{selectedVisit.score}점</p>
+              <p style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>
+                {selectedVisit.score >= 70 ? "두피 상태가 양호해요 👍" : selectedVisit.score >= 50 ? "조금 더 관리가 필요해요 💆" : "집중 케어가 필요해요 ⚠️"}
+              </p>
+            </div>
+
+            {/* 지표 */}
+            <div style={{ background: C.bg, borderRadius: 12, padding: 16 }}>
+              <p style={{ fontSize: 12, fontWeight: 800, marginBottom: 12 }}>📊 상세 지표</p>
+              {["sleep", "stress", "moisture", "elasticity"].map(k => (
+                <div key={k} style={{ marginBottom: 10 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                    <span style={{ fontSize: 12, color: C.sub }}>{meta[k].label}</span>
+                    <span style={{ fontSize: 12, fontWeight: 800, color: meta[k].color }}>{selectedVisit[k]}점</span>
+                  </div>
+                  <Bar value={selectedVisit[k]} color={meta[k].color} />
                 </div>
-                <div style={{ background: "#fff", borderRadius: "0 14px 14px 14px", padding: "10px 12px" }}>
-                  <p style={{ fontSize: 12, color: "#1a1a1a", lineHeight: 1.8, whiteSpace: "pre-wrap" }}>
-                    {kakaoMsg}{!done && <span style={{ color: C.gold }}>▋</span>}
-                  </p>
-                </div>
-                {done && <p style={{ fontSize: 10, color: "#999", marginTop: 4 }}>오전 11:32 · 읽음</p>}
+              ))}
+            </div>
+
+            {/* AI 두피 분석 */}
+            {selectedVisit.scalp_report && (
+              <div style={{ background: C.bg, borderRadius: 12, padding: 16 }}>
+                <p style={{ fontSize: 12, fontWeight: 800, marginBottom: 8, color: C.gold }}>🔬 AI 두피 분석</p>
+                <p style={{ fontSize: 11, color: C.sub, lineHeight: 1.8, whiteSpace: "pre-wrap" }}>
+                  {selectedVisit.scalp_report.slice(0, 200)}...
+                </p>
               </div>
             )}
+
+            {/* 메모 */}
+            {selectedVisit.note && (
+              <div style={{ background: C.bg, borderRadius: 12, padding: 16 }}>
+                <p style={{ fontSize: 12, fontWeight: 800, marginBottom: 8 }}>📝 스타일리스트 메모</p>
+                <p style={{ fontSize: 12, color: C.sub, lineHeight: 1.8 }}>{selectedVisit.note}</p>
+              </div>
+            )}
+
+            <p style={{ fontSize: 11, color: C.muted, textAlign: "center" }}>
+              🧴 AI 제품 추천은 제품 등록 후 추가될 예정이에요
+            </p>
           </div>
-          <div style={{ background: "#fff", padding: "7px 10px", display: "flex", gap: 6 }}>
-            <div style={{ flex: 1, height: 26, background: "#f5f5f5", borderRadius: 13, fontSize: 11, color: "#aaa", padding: "0 10px", display: "flex", alignItems: "center" }}>메시지 입력</div>
-            <div style={{ width: 26, height: 26, background: C.kakao, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12 }}>▶</div>
+        ) : (
+          <div style={{ textAlign: "center", padding: "60px 0", color: C.muted }}>
+            <p style={{ fontSize: 32, marginBottom: 8 }}>📋</p>
+            <p style={{ fontSize: 13 }}>방문 날짜를 선택해주세요</p>
           </div>
-        </div>
+        )}
       </Card>
     </div>
   );

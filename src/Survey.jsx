@@ -1,3 +1,4 @@
+// Survey.jsx 최종 버전
 import { useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 
@@ -5,20 +6,37 @@ const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_KEY;
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
+const STYLISTS = ["이서", "승미", "우기"];
+
 const C = {
   bg: "#f8f6f2", card: "#fff", border: "#ede8e0",
   gold: "#b8965a", goldBg: "#fdf8f0", goldLight: "#d4b07a",
   text: "#1a1a1a", sub: "#666", muted: "#999",
-  green: "#3a8c5c",
+  green: "#3a8c5c", red: "#d94f4f",
 };
+
+// 생년월일 → 나이 계산
+function calcAge(birthDate) {
+  if (!birthDate) return 0;
+  const today = new Date();
+  const birth = new Date(birthDate);
+  let age = today.getFullYear() - birth.getFullYear();
+  const m = today.getMonth() - birth.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--;
+  return age;
+}
 
 function OptionBtn({ label, selected, onClick }) {
   return (
     <button onClick={onClick} style={{
-      padding: "12px 16px", borderRadius: 10, border: `1.5px solid ${selected ? C.gold : C.border}`,
-      background: selected ? C.goldBg : "#fff", color: selected ? C.gold : C.text,
-      fontFamily: "inherit", fontSize: 14, fontWeight: selected ? 700 : 400,
-      cursor: "pointer", transition: "all 0.15s", textAlign: "left", width: "100%",
+      padding: "12px 16px", borderRadius: 10,
+      border: `1.5px solid ${selected ? C.gold : C.border}`,
+      background: selected ? C.goldBg : "#fff",
+      color: selected ? C.gold : C.text,
+      fontFamily: "inherit", fontSize: 14,
+      fontWeight: selected ? 700 : 400,
+      cursor: "pointer", transition: "all 0.15s",
+      textAlign: "left", width: "100%",
     }}>
       {selected ? "✓ " : ""}{label}
     </button>
@@ -28,10 +46,11 @@ function OptionBtn({ label, selected, onClick }) {
 export default function Survey() {
   const [step, setStep] = useState(0);
   const [form, setForm] = useState({
-    name: "", phone: "",
+    name: "", phone: "", birth_date: "", gender: "", stylist: STYLISTS[0],
     sleep: "", stress: 0,
     condition: "", scalp_concerns: [],
     shampoo_frequency: "", scalp_type: "",
+    marketing_agree: false,
   });
   const [done, setDone] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -47,8 +66,11 @@ export default function Survey() {
     }));
   };
 
+  // ─── 제출 ─────────────────────────────────────────────────────────
   const submit = async () => {
     setSaving(true);
+
+    // 1. surveys 테이블 저장
     await supabase.from("surveys").insert({
       name: form.name,
       phone: form.phone,
@@ -59,36 +81,134 @@ export default function Survey() {
       shampoo_frequency: form.shampoo_frequency,
       scalp_type: form.scalp_type,
     });
+
+    // 2. customers 테이블 자동 등록 or 업데이트
+    const age = calcAge(form.birth_date);
+
+    const { data: existing } = await supabase
+      .from("customers")
+      .select("*")
+      .eq("phone", form.phone)
+      .single();
+
+    if (existing) {
+      // 기존 고객 → 업데이트
+      await supabase
+        .from("customers")
+        .update({
+          stylist: form.stylist,
+          gender: form.gender,
+          birth_date: form.birth_date || null,
+          age,
+          marketing_agree: form.marketing_agree,
+        })
+        .eq("phone", form.phone);
+    } else {
+      // 신규 고객 → 자동 등록
+      await supabase.from("customers").insert({
+        name: form.name,
+        phone: form.phone,
+        stylist: form.stylist,
+        gender: form.gender,
+        birth_date: form.birth_date || null,
+        age,
+        marketing_agree: form.marketing_agree,
+        join_date: new Date().toISOString().slice(0, 10),
+        memo: "",
+      });
+    }
+
     setSaving(false);
     setDone(true);
   };
 
+  // ─── 스텝 정의 ────────────────────────────────────────────────────
   const steps = [
     // 0: 기본 정보
     {
       title: "기본 정보",
       emoji: "👤",
       content: (
-        <div style={{ display: "grid", gap: 14 }}>
+        <div style={{ display: "grid", gap: 16 }}>
+
+          {/* 이름 */}
           <div>
-            <label style={{ fontSize: 13, color: C.sub, display: "block", marginBottom: 6, fontWeight: 600 }}>이름</label>
+            <label style={{ fontSize: 13, color: C.sub, display: "block", marginBottom: 6, fontWeight: 600 }}>이름 *</label>
             <input value={form.name} onChange={e => set("name", e.target.value)} placeholder="홍길동"
               style={{ width: "100%", padding: "12px 16px", border: `1.5px solid ${C.border}`, borderRadius: 10, fontSize: 15, fontFamily: "inherit", outline: "none", boxSizing: "border-box" }} />
           </div>
+
+          {/* 전화번호 */}
           <div>
-            <label style={{ fontSize: 13, color: C.sub, display: "block", marginBottom: 6, fontWeight: 600 }}>전화번호</label>
+            <label style={{ fontSize: 13, color: C.sub, display: "block", marginBottom: 6, fontWeight: 600 }}>전화번호 *</label>
             <input value={form.phone} onChange={e => set("phone", e.target.value)} placeholder="010-0000-0000"
               style={{ width: "100%", padding: "12px 16px", border: `1.5px solid ${C.border}`, borderRadius: 10, fontSize: 15, fontFamily: "inherit", outline: "none", boxSizing: "border-box" }} />
           </div>
+
+          {/* 생년월일 + 나이 자동 표시 */}
+          <div>
+            <label style={{ fontSize: 13, color: C.sub, display: "block", marginBottom: 6, fontWeight: 600 }}>
+              생년월일
+              {form.birth_date && (
+                <span style={{ marginLeft: 8, color: C.gold, fontWeight: 800 }}>
+                  ({calcAge(form.birth_date)}세)
+                </span>
+              )}
+            </label>
+            <input
+              type="date" value={form.birth_date}
+              onChange={e => set("birth_date", e.target.value)}
+              style={{ width: "100%", padding: "12px 16px", border: `1.5px solid ${C.border}`, borderRadius: 10, fontSize: 15, fontFamily: "inherit", outline: "none", boxSizing: "border-box" }}
+            />
+          </div>
+
+          {/* 성별 */}
+          <div>
+            <label style={{ fontSize: 13, color: C.sub, display: "block", marginBottom: 10, fontWeight: 600 }}>성별</label>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+              {["여성", "남성"].map(g => (
+                <button key={g} onClick={() => set("gender", g)} style={{
+                  padding: "14px 8px", borderRadius: 12,
+                  border: `1.5px solid ${form.gender === g ? C.gold : C.border}`,
+                  background: form.gender === g ? C.goldBg : "#fff",
+                  color: form.gender === g ? C.gold : C.text,
+                  fontFamily: "inherit", fontSize: 15,
+                  fontWeight: form.gender === g ? 800 : 400,
+                  cursor: "pointer", transition: "all 0.15s", textAlign: "center",
+                }}>
+                  {g === "여성" ? "👩 " : "👨 "}{form.gender === g ? "✓ " : ""}{g}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* 담당 스타일리스트 */}
+          <div>
+            <label style={{ fontSize: 13, color: C.sub, display: "block", marginBottom: 10, fontWeight: 600 }}>담당 스타일리스트 *</label>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
+              {STYLISTS.map(s => (
+                <button key={s} onClick={() => set("stylist", s)} style={{
+                  padding: "14px 8px", borderRadius: 12,
+                  border: `1.5px solid ${form.stylist === s ? C.gold : C.border}`,
+                  background: form.stylist === s ? C.goldBg : "#fff",
+                  color: form.stylist === s ? C.gold : C.text,
+                  fontFamily: "inherit", fontSize: 15,
+                  fontWeight: form.stylist === s ? 800 : 400,
+                  cursor: "pointer", transition: "all 0.15s", textAlign: "center",
+                }}>
+                  {form.stylist === s ? "✓ " : ""}{s}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
       ),
-      canNext: form.name && form.phone,
+      canNext: form.name && form.phone && form.stylist,
     },
+
     // 1: 수면
     {
-      title: "수면",
-      emoji: "😴",
-      desc: "요즘 평균 수면 시간은?",
+      title: "수면", emoji: "😴", desc: "요즘 평균 수면 시간은?",
       content: (
         <div style={{ display: "grid", gap: 10 }}>
           {["5시간 이하", "5~6시간", "6~7시간", "7시간 이상"].map(v => (
@@ -98,11 +218,10 @@ export default function Survey() {
       ),
       canNext: form.sleep,
     },
+
     // 2: 스트레스
     {
-      title: "스트레스",
-      emoji: "🧠",
-      desc: "지난 1주일 스트레스 강도는?",
+      title: "스트레스", emoji: "🧠", desc: "지난 1주일 스트레스 강도는?",
       content: (
         <div>
           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
@@ -116,8 +235,8 @@ export default function Survey() {
                 border: `2px solid ${form.stress === v ? C.gold : C.border}`,
                 background: form.stress === v ? C.gold : "#fff",
                 color: form.stress === v ? "#fff" : C.text,
-                fontSize: 18, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
-                transition: "all 0.15s",
+                fontSize: 18, fontWeight: 700, cursor: "pointer",
+                fontFamily: "inherit", transition: "all 0.15s",
               }}>{v}</button>
             ))}
           </div>
@@ -128,11 +247,10 @@ export default function Survey() {
       ),
       canNext: form.stress > 0,
     },
+
     // 3: 몸 컨디션
     {
-      title: "몸 컨디션",
-      emoji: "💪",
-      desc: "요즘 전반적인 몸 상태는?",
+      title: "몸 컨디션", emoji: "💪", desc: "요즘 전반적인 몸 상태는?",
       content: (
         <div style={{ display: "grid", gap: 10 }}>
           {["나쁨", "보통", "좋음"].map(v => (
@@ -142,27 +260,23 @@ export default function Survey() {
       ),
       canNext: form.condition,
     },
+
     // 4: 두피 고민
     {
-      title: "두피 고민",
-      emoji: "🔬",
-      desc: "신경 쓰이는 두피/모발 고민은? (복수 선택 가능)",
+      title: "두피 고민", emoji: "🔬", desc: "신경 쓰이는 두피/모발 고민은? (복수 선택 가능)",
       content: (
         <div style={{ display: "grid", gap: 10 }}>
           {["탈모/숱 감소", "비듬/각질", "가려움/따가움", "유분/냄새", "모발 손상/갈라짐", "특별히 없음"].map(v => (
-            <OptionBtn key={v} label={v}
-              selected={form.scalp_concerns.includes(v)}
-              onClick={() => toggleConcern(v)} />
+            <OptionBtn key={v} label={v} selected={form.scalp_concerns.includes(v)} onClick={() => toggleConcern(v)} />
           ))}
         </div>
       ),
       canNext: form.scalp_concerns.length > 0,
     },
+
     // 5: 샴푸 주기
     {
-      title: "샴푸 주기",
-      emoji: "🚿",
-      desc: "머리를 얼마나 자주 감으시나요?",
+      title: "샴푸 주기", emoji: "🚿", desc: "머리를 얼마나 자주 감으시나요?",
       content: (
         <div style={{ display: "grid", gap: 10 }}>
           {["매일", "2일에 한 번", "3일 이상에 한 번"].map(v => (
@@ -172,11 +286,10 @@ export default function Survey() {
       ),
       canNext: form.shampoo_frequency,
     },
+
     // 6: 두피 타입
     {
-      title: "두피 타입",
-      emoji: "💆",
-      desc: "본인이 느끼는 두피 타입은?",
+      title: "두피 타입", emoji: "💆", desc: "본인이 느끼는 두피 타입은?",
       content: (
         <div style={{ display: "grid", gap: 10 }}>
           {["건성 (당김/건조)", "지성 (기름짐)", "복합 (부위별 다름)", "잘 모르겠음"].map(v => (
@@ -186,8 +299,63 @@ export default function Survey() {
       ),
       canNext: form.scalp_type,
     },
+
+    // 7: 마케팅 동의
+    {
+      title: "약관 동의",
+      emoji: "📋",
+      content: (
+        <div style={{ display: "grid", gap: 14 }}>
+          {/* 개인정보 수집 (필수) */}
+          <div style={{ background: C.bg, borderRadius: 12, padding: 16 }}>
+            <p style={{ fontSize: 13, fontWeight: 800, marginBottom: 6 }}>개인정보 수집 및 이용 동의 (필수)</p>
+            <p style={{ fontSize: 12, color: C.muted, lineHeight: 1.8, marginBottom: 10 }}>
+              수집 항목: 이름, 전화번호, 생년월일, 성별<br />
+              수집 목적: 두피 케어 서비스 제공<br />
+              보유 기간: 서비스 이용 종료 시까지
+            </p>
+            <div style={{ background: "#edf7f1", border: "1px solid #a8d5b5", borderRadius: 8, padding: "10px 14px", fontSize: 13, color: C.green, fontWeight: 700 }}>
+              ✓ 서비스 이용을 위해 필수 동의됩니다
+            </div>
+          </div>
+
+          {/* 마케팅 동의 (선택) */}
+          <div
+            onClick={() => set("marketing_agree", !form.marketing_agree)}
+            style={{
+              background: form.marketing_agree ? C.goldBg : "#fff",
+              border: `1.5px solid ${form.marketing_agree ? C.gold : C.border}`,
+              borderRadius: 12, padding: 16, cursor: "pointer",
+              transition: "all 0.2s",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <div style={{
+                width: 24, height: 24, borderRadius: 6,
+                border: `2px solid ${form.marketing_agree ? C.gold : C.border}`,
+                background: form.marketing_agree ? C.gold : "#fff",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                flexShrink: 0, transition: "all 0.2s",
+              }}>
+                {form.marketing_agree && <span style={{ color: "#fff", fontSize: 14, fontWeight: 900 }}>✓</span>}
+              </div>
+              <div>
+                <p style={{ fontSize: 13, fontWeight: 800, color: form.marketing_agree ? C.gold : C.text }}>
+                  마케팅 정보 수신 동의 (선택)
+                </p>
+                <p style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>
+                  두피 케어 리포트 및 맞춤 케어 정보를 카카오톡으로 받아보세요
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      ),
+      canNext: true, // 마케팅 동의는 선택이라 항상 다음 가능
+    },
   ];
 
+  // ─── 완료 화면 ────────────────────────────────────────────────────
   if (done) {
     return (
       <div style={{ minHeight: "100vh", background: C.bg, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
@@ -196,8 +364,13 @@ export default function Survey() {
           <h2 style={{ fontSize: 22, fontWeight: 900, marginBottom: 12, color: C.text }}>감사합니다!</h2>
           <p style={{ fontSize: 15, color: C.sub, lineHeight: 1.8 }}>
             {form.name}님의 소중한 답변을 받았어요.<br />
-            더 나은 두피 케어를 위해 활용할게요 😊
+            담당 {form.stylist} 스타일리스트가 곧 안내해드릴게요 😊
           </p>
+          {form.marketing_agree && (
+            <div style={{ marginTop: 16, background: "#edf7f1", border: "1px solid #a8d5b5", borderRadius: 12, padding: 14 }}>
+              <p style={{ fontSize: 13, color: C.green, fontWeight: 700 }}>✅ 두피 케어 리포트를 카카오톡으로 보내드릴게요!</p>
+            </div>
+          )}
           <div style={{ marginTop: 24, background: C.goldBg, border: `1px solid ${C.goldLight}`, borderRadius: 14, padding: 20 }}>
             <p style={{ fontSize: 13, color: C.gold, fontWeight: 700 }}>보그헤어위시티점</p>
             <p style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>오늘도 좋은 하루 보내세요 ✦</p>
@@ -208,7 +381,7 @@ export default function Survey() {
   }
 
   const current = steps[step];
-  const progress = ((step) / steps.length) * 100;
+  const progress = (step / steps.length) * 100;
 
   return (
     <div style={{ minHeight: "100vh", background: C.bg, fontFamily: "'Noto Sans KR', sans-serif", color: C.text }}>
@@ -247,22 +420,24 @@ export default function Survey() {
           {step > 0 && (
             <button onClick={() => setStep(s => s - 1)} style={{
               flex: 1, padding: 14, borderRadius: 12, border: `1px solid ${C.border}`,
-              background: "#fff", fontSize: 15, fontFamily: "inherit", cursor: "pointer", color: C.sub,
+              background: "#fff", fontSize: 15, fontFamily: "inherit",
+              cursor: "pointer", color: C.sub,
             }}>← 이전</button>
           )}
           {step < steps.length - 1 ? (
             <button onClick={() => setStep(s => s + 1)} disabled={!current.canNext} style={{
               flex: 2, padding: 14, borderRadius: 12, border: "none",
               background: current.canNext ? C.gold : C.border,
-              color: "#fff", fontSize: 15, fontWeight: 700, fontFamily: "inherit",
-              cursor: current.canNext ? "pointer" : "not-allowed", transition: "all 0.2s",
+              color: "#fff", fontSize: 15, fontWeight: 700,
+              fontFamily: "inherit", cursor: current.canNext ? "pointer" : "not-allowed",
+              transition: "all 0.2s",
             }}>다음 →</button>
           ) : (
             <button onClick={submit} disabled={!current.canNext || saving} style={{
               flex: 2, padding: 14, borderRadius: 12, border: "none",
               background: current.canNext ? C.green : C.border,
-              color: "#fff", fontSize: 15, fontWeight: 700, fontFamily: "inherit",
-              cursor: current.canNext ? "pointer" : "not-allowed",
+              color: "#fff", fontSize: 15, fontWeight: 700,
+              fontFamily: "inherit", cursor: current.canNext ? "pointer" : "not-allowed",
             }}>{saving ? "저장 중..." : "✓ 제출하기"}</button>
           )}
         </div>
