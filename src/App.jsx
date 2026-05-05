@@ -202,7 +202,11 @@ function ScalpTab({ customer, onUpdate }) {
     const files = Array.from(e.target.files).slice(0, 5 - images.length);
     Promise.all(files.map((file, i) => new Promise(resolve => {
       const reader = new FileReader();
-      reader.onload = ev => resolve({ src: ev.target.result, label: LABELS[images.length + i] || `구역${images.length + i + 1}`, report: "", analyzing: false, done: false });
+      reader.onload = ev => resolve({
+        src: ev.target.result,
+        label: LABELS[images.length + i] || `구역${images.length + i + 1}`,
+        report: "", analyzing: false, done: false
+      });
       reader.readAsDataURL(file);
     }))).then(newImgs => setImages(prev => [...prev, ...newImgs].slice(0, 5)));
   };
@@ -214,7 +218,15 @@ function ScalpTab({ customer, onUpdate }) {
     const mediaType = img.src.split(";")[0].split(":")[1];
     try {
       let fullText = "";
-      await callAI(`두피 전문 AI입니다. [${img.label}] 두피 이미지를 분석해주세요.\n고객: ${customer.name}님 (${customer.age}세)\n\n**🔬 두피 타입** (판정+근거 1문장)\n**📊 주요 지표**\n- 모공 청결도: XX/100\n- 두피 수분도: XX/100\n- 피지 분비량: XX/100\n- 모낭 건강도: XX/100\n- 염증·자극: XX/100\n**🚨 주의 소견** (2~3개)\n**💆 추천 케어** (2가지)\n**📈 개선 예상**\n\n각 섹션 3줄 이내, 한국어로.`, base64, mediaType, text => { fullText += text; setImages(prev => prev.map((im, i) => i === idx ? { ...im, report: fullText } : im)); }, img.label, customer.name, customer.age);
+      await callAI(
+        `두피 전문 AI입니다. [${img.label}] 두피 이미지를 분석해주세요.\n고객: ${customer.name}님 (${customer.age}세)\n\n**🔬 두피 타입** (판정+근거 1문장)\n**📊 주요 지표**\n- 모공 청결도: XX/100\n- 두피 수분도: XX/100\n- 피지 분비량: XX/100\n- 모낭 건강도: XX/100\n- 염증·자극: XX/100\n**🚨 주의 소견** (2~3개)\n**💆 추천 케어** (2가지)\n**📈 개선 예상**\n\n각 섹션 3줄 이내, 한국어로.`,
+        base64, mediaType,
+        text => {
+          fullText += text;
+          setImages(prev => prev.map((im, i) => i === idx ? { ...im, report: fullText } : im));
+        },
+        img.label, customer.name, customer.age
+      );
       setImages(prev => prev.map((im, i) => i === idx ? { ...im, analyzing: false, done: true } : im));
     } catch (e) {
       setImages(prev => prev.map((im, i) => i === idx ? { ...im, report: `⚠️ 오류: ${e.message}`, analyzing: false, done: true } : im));
@@ -226,28 +238,98 @@ function ScalpTab({ customer, onUpdate }) {
     return <p key={i} style={{ fontSize: 13, lineHeight: 1.8, color: C.sub, margin: "2px 0" }} dangerouslySetInnerHTML={{ __html: html }} />;
   });
 
+  const saveReport = async () => {
+    const allReports = images
+      .filter(im => im.done && im.report)
+      .map(im => "[" + im.label + "]\n" + im.report)
+      .join("\n\n---\n\n");
+
+    let latest = customer.visits?.[customer.visits.length - 1];
+
+    // 방문 기록 없으면 자동 생성
+    if (!latest) {
+      const { data: survey } = await supabase
+        .from("surveys")
+        .select("*")
+        .eq("phone", customer.phone)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .single();
+
+      const sleepMap = { "5시간 이하": 30, "5~6시간": 50, "6~7시간": 70, "7시간 이상": 85 };
+      const sleep = sleepMap[survey?.sleep] || 50;
+      const stressVal = survey?.stress ? survey.stress * 15 : 50;
+      const moisture = survey?.condition === "좋음" ? 75 : survey?.condition === "보통" ? 55 : 35;
+      const elasticity = 50;
+      const score = Math.round(sleep * 0.2 + (100 - stressVal) * 0.2 + moisture * 0.3 + elasticity * 0.3);
+
+      const { data: newVisit } = await supabase
+        .from("visits")
+        .insert({
+          customer_id: customer.id,
+          date: new Date().toISOString().slice(0, 10),
+          service: "두피 케어",
+          sleep,
+          stress: stressVal,
+          moisture,
+          elasticity,
+          score,
+          scalp_report: allReports,
+        })
+        .select()
+        .single();
+
+      if (onUpdate) onUpdate({ ...customer, visits: [...(customer.visits || []), newVisit] });
+      alert("✅ 방문 기록 자동 생성 + 두피 분석 저장 완료!");
+      return;
+    }
+
+    // 방문 기록 있으면 업데이트
+    await supabase.from("visits").update({ scalp_report: allReports }).eq("id", latest.id);
+    alert("✅ 두피 분석 결과가 저장됐어요!");
+  };
+
   return (
     <div>
       <Card style={{ marginBottom: 16 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-          <div><h3 style={{ fontSize: 15, fontWeight: 800 }}>📸 두피 사진 ({images.length}/5)</h3><p style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>정수리·측두부·후두부 최대 5장</p></div>
+          <div>
+            <h3 style={{ fontSize: 15, fontWeight: 800 }}>📸 두피 사진 ({images.length}/5)</h3>
+            <p style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>정수리·측두부·후두부 최대 5장</p>
+          </div>
           <div style={{ display: "flex", gap: 8 }}>
             {images.length < 5 && <Btn variant="outline" size="sm" onClick={() => fileRef.current.click()}>+ 사진 추가</Btn>}
-            {images.length > 0 && <Btn variant="gold" size="sm" onClick={() => images.forEach((_, i) => { if (!images[i].done && !images[i].analyzing) analyze(i); })}>🔬 전체 분석</Btn>}
+            {images.length > 0 && (
+              <Btn variant="gold" size="sm" onClick={() => images.forEach((_, i) => { if (!images[i].done && !images[i].analyzing) analyze(i); })}>
+                🔬 전체 분석
+              </Btn>
+            )}
           </div>
         </div>
+
         {images.length > 0 ? (
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
             {images.map((img, i) => (
               <div key={i} onClick={() => setActiveIdx(i)} style={{ position: "relative", width: 82, height: 82, borderRadius: 10, overflow: "hidden", border: `2px solid ${activeIdx === i ? C.gold : C.border}`, cursor: "pointer" }}>
                 <img src={img.src} alt={img.label} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, background: "rgba(0,0,0,0.55)", padding: "2px 4px", textAlign: "center" }}><span style={{ fontSize: 9, color: "#fff", fontWeight: 700 }}>{img.label}</span></div>
-                {img.done && <div style={{ position: "absolute", top: 3, right: 3, width: 16, height: 16, borderRadius: "50%", background: C.green, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, color: "#fff" }}>✓</div>}
-                {img.analyzing && <div style={{ position: "absolute", inset: 0, background: "rgba(255,255,255,0.75)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20 }}>⚙️</div>}
+                <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, background: "rgba(0,0,0,0.55)", padding: "2px 4px", textAlign: "center" }}>
+                  <span style={{ fontSize: 9, color: "#fff", fontWeight: 700 }}>{img.label}</span>
+                </div>
+                {img.done && (
+                  <div style={{ position: "absolute", top: 3, right: 3, width: 16, height: 16, borderRadius: "50%", background: C.green, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, color: "#fff" }}>✓</div>
+                )}
+                {img.analyzing && (
+                  <div style={{ position: "absolute", inset: 0, background: "rgba(255,255,255,0.75)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20 }}>⚙️</div>
+                )}
                 <button onClick={e => { e.stopPropagation(); setImages(p => p.filter((_, j) => j !== i)); setActiveIdx(0); }} style={{ position: "absolute", top: 2, left: 2, width: 16, height: 16, borderRadius: "50%", background: "rgba(0,0,0,0.5)", border: "none", color: "#fff", fontSize: 10, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
               </div>
             ))}
-            {images.length < 5 && <div onClick={() => fileRef.current.click()} style={{ width: 82, height: 82, borderRadius: 10, border: `2px dashed ${C.border}`, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", cursor: "pointer", background: C.bg }}><span style={{ fontSize: 22, color: C.muted }}>+</span><span style={{ fontSize: 9, color: C.muted }}>추가</span></div>}
+            {images.length < 5 && (
+              <div onClick={() => fileRef.current.click()} style={{ width: 82, height: 82, borderRadius: 10, border: `2px dashed ${C.border}`, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", cursor: "pointer", background: C.bg }}>
+                <span style={{ fontSize: 22, color: C.muted }}>+</span>
+                <span style={{ fontSize: 9, color: C.muted }}>추가</span>
+              </div>
+            )}
           </div>
         ) : (
           <div onClick={() => fileRef.current.click()} style={{ border: `2px dashed ${C.border}`, borderRadius: 12, padding: "48px 20px", textAlign: "center", cursor: "pointer" }} onMouseEnter={e => e.currentTarget.style.borderColor = C.gold} onMouseLeave={e => e.currentTarget.style.borderColor = C.border}>
@@ -258,72 +340,52 @@ function ScalpTab({ customer, onUpdate }) {
         )}
         <input ref={fileRef} type="file" accept="image/*" multiple onChange={handleFiles} style={{ display: "none" }} />
       </Card>
+
       {images.length > 0 && (
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
           <Card>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
               <h3 style={{ fontSize: 14, fontWeight: 800 }}>{images[activeIdx]?.label}</h3>
-              {!images[activeIdx]?.done && !images[activeIdx]?.analyzing && <Btn variant="gold" size="sm" onClick={() => analyze(activeIdx)}>🔬 분석</Btn>}
+              {!images[activeIdx]?.done && !images[activeIdx]?.analyzing && (
+                <Btn variant="gold" size="sm" onClick={() => analyze(activeIdx)}>🔬 분석</Btn>
+              )}
             </div>
             <div style={{ position: "relative", borderRadius: 12, overflow: "hidden" }}>
               <img src={images[activeIdx]?.src} alt="두피" style={{ width: "100%", height: 240, objectFit: "cover", display: "block" }} />
-              {images[activeIdx]?.analyzing && <div style={{ position: "absolute", inset: 0, background: "rgba(255,255,255,0.85)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 10 }}><p style={{ fontSize: 14, fontWeight: 700 }}>AI 분석 중...</p><div style={{ width: "60%", height: 4, background: C.border, borderRadius: 99 }}><div style={{ height: "100%", width: "70%", background: C.gold, borderRadius: 99 }} /></div></div>}
-              {images[activeIdx]?.done && <div style={{ position: "absolute", top: 10, right: 10, background: C.green, color: "#fff", fontSize: 11, fontWeight: 700, padding: "4px 10px", borderRadius: 99 }}>✓ 완료</div>}
+              {images[activeIdx]?.analyzing && (
+                <div style={{ position: "absolute", inset: 0, background: "rgba(255,255,255,0.85)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 10 }}>
+                  <p style={{ fontSize: 14, fontWeight: 700 }}>AI 분석 중...</p>
+                  <div style={{ width: "60%", height: 4, background: C.border, borderRadius: 99 }}>
+                    <div style={{ height: "100%", width: "70%", background: C.gold, borderRadius: 99 }} />
+                  </div>
+                </div>
+              )}
+              {images[activeIdx]?.done && (
+                <div style={{ position: "absolute", top: 10, right: 10, background: C.green, color: "#fff", fontSize: 11, fontWeight: 700, padding: "4px 10px", borderRadius: 99 }}>✓ 완료</div>
+              )}
             </div>
           </Card>
+
           <Card>
             <h3 style={{ fontSize: 14, fontWeight: 800, marginBottom: 16 }}>📋 AI 진단 리포트</h3>
             {!images[activeIdx]?.report && !images[activeIdx]?.analyzing ? (
-              <div style={{ textAlign: "center", padding: "60px 0", color: C.muted }}><div style={{ fontSize: 36, marginBottom: 8, opacity: 0.3 }}>🤖</div><p style={{ fontSize: 13 }}>분석 버튼을 눌러주세요</p></div>
+              <div style={{ textAlign: "center", padding: "60px 0", color: C.muted }}>
+                <div style={{ fontSize: 36, marginBottom: 8, opacity: 0.3 }}>🤖</div>
+                <p style={{ fontSize: 13 }}>분석 버튼을 눌러주세요</p>
+              </div>
             ) : (
-              <div style={{ maxHeight: 280, overflowY: "auto" }}>{renderMd(images[activeIdx]?.report || "")}{images[activeIdx]?.analyzing && <span style={{ color: C.gold }}>▋</span>}</div>
+              <div style={{ maxHeight: 280, overflowY: "auto" }}>
+                {renderMd(images[activeIdx]?.report || "")}
+                {images[activeIdx]?.analyzing && <span style={{ color: C.gold }}>▋</span>}
+              </div>
             )}
             {images.some(im => im.done) && (
-              <button onClick={async () => {
-  const allReports = images
-    .filter(im => im.done && im.report)
-    .map(im => "[" + im.label + "]\n" + im.report)
-    .join("\n\n---\n\n");
-
-  let latest = customer.visits?.[customer.visits.length - 1];
-
-  if (!latest) {
-    const { data: survey } = await supabase
-      .from("surveys")
-      .select("*")
-      .eq("phone", customer.phone)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .single();
-
-    const sleepMap = { "5시간 이하": 30, "5~6시간": 50, "6~7시간": 70, "7시간 이상": 85 };
-    const sleep = sleepMap[survey?.sleep] || 50;
-    const stressVal = survey?.stress ? survey.stress * 15 : 50;
-    const moisture = survey?.condition === "좋음" ? 75 : survey?.condition === "보통" ? 55 : 35;
-    const elasticity = 50;
-    const score = Math.round(sleep * 0.2 + (100 - stressVal) * 0.2 + moisture * 0.3 + elasticity * 0.3);
-
-    const { data: newVisit } = await supabase
-      .from("visits")
-      .insert({
-        customer_id: customer.id,
-        date: new Date().toISOString().slice(0, 10),
-        service: "두피 케어",
-        sleep, stress: stressVal, moisture, elasticity, score,
-        scalp_report: allReports,
-      })
-      .select()
-      .single();
-
-    if (onUpdate) onUpdate({ ...customer, visits: [...(customer.visits || []), newVisit] });
-    alert("✅ 방문 기록 자동 생성 + 두피 분석 저장 완료!");
-    return;
-  }
-
-  await supabase.from("visits").update({ scalp_report: allReports }).eq("id", latest.id);
-  alert("✅ 두피 분석 결과가 저장됐어요!");
-}}
-              }} style={{ marginTop: 12, width: "100%", padding: "10px", background: C.green, color: "#fff", border: "none", borderRadius: 10, fontFamily: "inherit", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>💾 분석 결과 저장하기</button>
+              <button
+                onClick={saveReport}
+                style={{ marginTop: 12, width: "100%", padding: "10px", background: C.green, color: "#fff", border: "none", borderRadius: 10, fontFamily: "inherit", fontWeight: 700, fontSize: 13, cursor: "pointer" }}
+              >
+                💾 분석 결과 저장하기
+              </button>
             )}
           </Card>
         </div>
@@ -331,12 +393,6 @@ function ScalpTab({ customer, onUpdate }) {
     </div>
   );
 }
-
-// HistoryTab 함수 전체 교체
-// 변경사항:
-// 1. 방문 기록 카드 접었다 폈다 (기본: 접힌 상태)
-// 2. 펼치면 "📋 리포트 확인" 버튼 표시
-// 3. 최근 방문은 기본으로 펼쳐져 있음
 
 function HistoryTab({ customer, onAddVisit }) {
   const [showForm, setShowForm] = useState(false);
@@ -892,7 +948,7 @@ function CustomerDetail({ customer, onBack, onUpdate, onDeleteCustomer }) {
       <div style={{ display: "flex", gap: 6, marginBottom: 20, background: "#f0ece4", padding: 5, borderRadius: 12 }}>
         {TABS.map(t => <button key={t.id} onClick={() => setTab(t.id)} style={{ flex: 1, padding: 10, border: "none", borderRadius: 9, cursor: "pointer", fontFamily: "inherit", fontSize: 13, fontWeight: 700, background: tab === t.id ? "#fff" : "transparent", color: tab === t.id ? C.text : C.muted, boxShadow: tab === t.id ? "0 2px 8px rgba(0,0,0,0.06)" : "none", transition: "all 0.18s" }}>{t.label}</button>)}
       </div>
-      <div style={{ display: tab === "scalp" ? "block" : "none" }}><ScalpTab customer={customer} onUpdate={onUpdate} />
+      <div style={{ display: tab === "scalp" ? "block" : "none" }}>
       <div style={{ display: tab === "history" ? "block" : "none" }}><HistoryTab customer={customer} onAddVisit={v => onUpdate({ ...customer, visits: [...visits, v] })} /></div>
       <div style={{ display: tab === "kakao" ? "block" : "none" }}><KakaoTab customer={customer} kakaoMsg={kakaoMsg} setKakaoMsg={setKakaoMsg} /></div>
     </div>
