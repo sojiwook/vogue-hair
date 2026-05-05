@@ -192,7 +192,7 @@ function AddCustomer({ onSave, onCancel }) {
   );
 }
 
-function ScalpTab({ customer }) {
+function ScalpTab({ customer, onUpdate }) {
   const fileRef = useRef();
   const LABELS = ["정수리", "측두부(좌)", "측두부(우)", "후두부", "전체"];
   const [images, setImages] = useState([]);
@@ -280,11 +280,49 @@ function ScalpTab({ customer }) {
             )}
             {images.some(im => im.done) && (
               <button onClick={async () => {
-                const latest = customer.visits?.[customer.visits.length - 1];
-                if (!latest) return alert("먼저 방문 기록을 추가해주세요!");
-                const allReports = images.filter(im => im.done && im.report).map(im => "[" + im.label + "]\n" + im.report).join("\n\n---\n\n");
-                await supabase.from("visits").update({ scalp_report: allReports }).eq("id", latest.id);
-                alert("✅ 두피 분석 결과가 저장됐어요!");
+  const allReports = images
+    .filter(im => im.done && im.report)
+    .map(im => "[" + im.label + "]\n" + im.report)
+    .join("\n\n---\n\n");
+
+  let latest = customer.visits?.[customer.visits.length - 1];
+
+  if (!latest) {
+    const { data: survey } = await supabase
+      .from("surveys")
+      .select("*")
+      .eq("phone", customer.phone)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .single();
+
+    const sleepMap = { "5시간 이하": 30, "5~6시간": 50, "6~7시간": 70, "7시간 이상": 85 };
+    const sleep = sleepMap[survey?.sleep] || 50;
+    const stressVal = survey?.stress ? survey.stress * 15 : 50;
+    const moisture = survey?.condition === "좋음" ? 75 : survey?.condition === "보통" ? 55 : 35;
+    const elasticity = 50;
+    const score = Math.round(sleep * 0.2 + (100 - stressVal) * 0.2 + moisture * 0.3 + elasticity * 0.3);
+
+    const { data: newVisit } = await supabase
+      .from("visits")
+      .insert({
+        customer_id: customer.id,
+        date: new Date().toISOString().slice(0, 10),
+        service: "두피 케어",
+        sleep, stress: stressVal, moisture, elasticity, score,
+        scalp_report: allReports,
+      })
+      .select()
+      .single();
+
+    if (onUpdate) onUpdate({ ...customer, visits: [...(customer.visits || []), newVisit] });
+    alert("✅ 방문 기록 자동 생성 + 두피 분석 저장 완료!");
+    return;
+  }
+
+  await supabase.from("visits").update({ scalp_report: allReports }).eq("id", latest.id);
+  alert("✅ 두피 분석 결과가 저장됐어요!");
+}}
               }} style={{ marginTop: 12, width: "100%", padding: "10px", background: C.green, color: "#fff", border: "none", borderRadius: 10, fontFamily: "inherit", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>💾 분석 결과 저장하기</button>
             )}
           </Card>
@@ -854,7 +892,7 @@ function CustomerDetail({ customer, onBack, onUpdate, onDeleteCustomer }) {
       <div style={{ display: "flex", gap: 6, marginBottom: 20, background: "#f0ece4", padding: 5, borderRadius: 12 }}>
         {TABS.map(t => <button key={t.id} onClick={() => setTab(t.id)} style={{ flex: 1, padding: 10, border: "none", borderRadius: 9, cursor: "pointer", fontFamily: "inherit", fontSize: 13, fontWeight: 700, background: tab === t.id ? "#fff" : "transparent", color: tab === t.id ? C.text : C.muted, boxShadow: tab === t.id ? "0 2px 8px rgba(0,0,0,0.06)" : "none", transition: "all 0.18s" }}>{t.label}</button>)}
       </div>
-      <div style={{ display: tab === "scalp" ? "block" : "none" }}><ScalpTab customer={customer} /></div>
+      <div style={{ display: tab === "scalp" ? "block" : "none" }}><ScalpTab customer={customer} onUpdate={onUpdate} />
       <div style={{ display: tab === "history" ? "block" : "none" }}><HistoryTab customer={customer} onAddVisit={v => onUpdate({ ...customer, visits: [...visits, v] })} /></div>
       <div style={{ display: tab === "kakao" ? "block" : "none" }}><KakaoTab customer={customer} kakaoMsg={kakaoMsg} setKakaoMsg={setKakaoMsg} /></div>
     </div>
