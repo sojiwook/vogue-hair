@@ -950,7 +950,7 @@ function CustomerDetail({ customer, onBack, onUpdate, onDeleteCustomer }) {
       </div>
       <div style={{ display: tab === "scalp" ? "block" : "none" }}>
       <div style={{ display: tab === "history" ? "block" : "none" }}><HistoryTab customer={customer} onAddVisit={v => onUpdate({ ...customer, visits: [...visits, v] })} /></div>
-      <div style={{ display: tab === "kakao" ? "block" : "none" }}><KakaoTab customer={customer} kakaoMsg={kakaoMsg} setKakaoMsg={setKakaoMsg} /></div>
+      <div style={{ display: tab === "kakao" ? "block" : "none" }}><KakaoTab customer={customer} /></div>
     </div>
   );
 }
