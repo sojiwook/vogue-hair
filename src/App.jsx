@@ -660,7 +660,7 @@ function KakaoTab({ customer }) {
   const [sent, setSent] = useState(false);
   const [sendError, setSendError] = useState("");
 
-  const selectedVisit = visits.find(v => v.id === selectedVisitId) ?? null;
+const selectedVisit = visits.find(v => String(v.id) === String(selectedVisitId)) ?? null;
 
   const openReport = () => {
     const url = `${window.location.origin}/report?phone=${encodeURIComponent(customer.phone)}`;
