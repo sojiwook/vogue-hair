@@ -380,7 +380,7 @@ const saveReport = async () => {
         </div>
       )}
     </div>
-  );
+  ;
 }
 
 function HistoryTab({ customer, onAddVisit }) {
