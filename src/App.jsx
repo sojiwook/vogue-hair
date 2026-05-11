@@ -258,7 +258,7 @@ function ScalpTab({ customer, onUpdate }) {
 
       const sleepMap = { "5시간 이하": 30, "5~6시간": 50, "6~7시간": 70, "7시간 이상": 85 };
       const sleep = sleepMap[survey?.sleep] || 50;
-      const stressVal = survey?.stress ? survey.stress * 15 : 50;
+      const stressVal = survey?.stress ? survey.stress * 20 : 50;
       const moisture = survey?.condition === "좋음" ? 75 : survey?.condition === "보통" ? 55 : 35;
       const elasticity = 50;
       const score = Math.round(sleep * 0.2 + (100 - stressVal) * 0.2 + moisture * 0.3 + elasticity * 0.3);
@@ -296,7 +296,7 @@ const { data: survey2 } = await supabase
 
 const sleepMap2 = { "5시간 이하": 30, "5~6시간": 50, "6~7시간": 70, "7시간 이상": 85 };
 const sleep2 = sleepMap2[survey2?.sleep] || latest.sleep;
-const stressVal2 = survey2?.stress ? survey2.stress * 15 : latest.stress;
+const stressVal2 = survey2?.stress ? survey2.stress * 20 : latest.stress;
 const moisture2 = survey2?.condition === "좋음" ? 75 : survey2?.condition === "보통" ? 55 : survey2?.condition === "나쁨" ? 35 : latest.moisture;
 const score2 = Math.round(sleep2 * 0.2 + (100 - stressVal2) * 0.2 + moisture2 * 0.3 + latest.elasticity * 0.3);
 

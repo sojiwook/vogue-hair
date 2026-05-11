@@ -71,16 +71,34 @@ export default function Survey() {
     setSaving(true);
 
     // 1. surveys 테이블 저장
-    await supabase.from("surveys").insert({
-      name: form.name,
-      phone: form.phone,
-      sleep: form.sleep,
-      stress: form.stress,
-      condition: form.condition,
-      scalp_concerns: form.scalp_concerns,
-      shampoo_frequency: form.shampoo_frequency,
-      scalp_type: form.scalp_type,
-    });
+   const { data: existingSurvey } = await supabase
+  .from("surveys")
+  .select("id")
+  .eq("phone", form.phone)
+  .maybeSingle();
+
+if (existingSurvey) {
+  await supabase.from("surveys").update({
+    name: form.name,
+    sleep: form.sleep,
+    stress: form.stress,
+    condition: form.condition,
+    scalp_concerns: form.scalp_concerns,
+    shampoo_frequency: form.shampoo_frequency,
+    scalp_type: form.scalp_type,
+  }).eq("phone", form.phone);
+} else {
+  await supabase.from("surveys").insert({
+    name: form.name,
+    phone: form.phone,
+    sleep: form.sleep,
+    stress: form.stress,
+    condition: form.condition,
+    scalp_concerns: form.scalp_concerns,
+    shampoo_frequency: form.shampoo_frequency,
+    scalp_type: form.scalp_type,
+  });
+}
 
     // 2. customers 테이블 자동 등록 or 업데이트
     const age = calcAge(form.birth_date);
