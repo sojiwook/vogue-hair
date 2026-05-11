@@ -116,6 +116,7 @@ function LoginPage({ onLogin }) {
     </div>
   );
 }
+
 function CustomerList({ customers, onSelect, onAdd, loading }) {
   const [search, setSearch] = useState("");
   const list = Array.isArray(customers) ? customers : [];
@@ -126,7 +127,6 @@ function CustomerList({ customers, onSelect, onAdd, loading }) {
         <div><h2 style={{ fontSize: 22, fontWeight: 900, marginBottom: 4 }}>고객 관리</h2><p style={{ fontSize: 13, color: C.muted }}>총 {list.length}명</p></div>
         <Btn variant="gold" onClick={onAdd}>+ 신규 고객 등록</Btn>
       </div>
-    
       <Field value={search} onChange={setSearch} placeholder="🔍 이름 또는 전화번호 검색..." style={{ marginBottom: 16 }} />
       {loading ? <div style={{ textAlign: "center", padding: 60, color: C.muted }}><p style={{ fontSize: 32, marginBottom: 8 }}>⏳</p><p>불러오는 중...</p></div> : (
         <div style={{ display: "grid", gap: 10 }}>
@@ -238,47 +238,46 @@ function ScalpTab({ customer, onUpdate }) {
     return <p key={i} style={{ fontSize: 13, lineHeight: 1.8, color: C.sub, margin: "2px 0" }} dangerouslySetInnerHTML={{ __html: html }} />;
   });
 
-const saveReport = async () => {
-  const allReports = images
-    .filter(im => im.done && im.report)
-    .map(im => "[" + im.label + "]\n" + im.report)
-    .join("\n\n---\n\n");
+  const saveReport = async () => {
+    const allReports = images
+      .filter(im => im.done && im.report)
+      .map(im => "[" + im.label + "]\n" + im.report)
+      .join("\n\n---\n\n");
 
-  const today = new Date().toISOString().slice(0, 10);
+    const today = new Date().toISOString().slice(0, 10);
 
-  // 메모리 말고 DB에서 직접 오늘 방문 기록 조회
-  const { data: todayVisit } = await supabase
-    .from("visits")
-    .select("*")
-    .eq("customer_id", customer.id)
-    .eq("date", today)
-    .maybeSingle();
+    // DB에서 직접 오늘 방문 기록 조회
+    const { data: todayVisit } = await supabase
+      .from("visits")
+      .select("*")
+      .eq("customer_id", customer.id)
+      .eq("date", today)
+      .maybeSingle();
 
-  if (todayVisit) {
-    // 오늘 방문 기록 있으면 scalp_report만 업데이트
-    await supabase.from("visits").update({
-      scalp_report: allReports,
-    }).eq("id", todayVisit.id);
-    if (onUpdate) onUpdate({ ...customer, visits: [...(customer.visits || []).filter(v => v.id !== todayVisit.id), { ...todayVisit, scalp_report: allReports }] });
-    alert("✅ 두피 분석 결과가 저장됐어요!");
-  } else {
-    // 오늘 방문 기록 없으면 새로 생성
-    const { data: newVisit } = await supabase.from("visits").insert({
-      customer_id: customer.id,
-      date: today,
-      service: "두피 케어",
-      sleep: 50,
-      stress: 50,
-      moisture: 55,
-      elasticity: 50,
-      score: 51,
-      scalp_report: allReports,
-    }).select().single();
-    if (onUpdate) onUpdate({ ...customer, visits: [...(customer.visits || []), newVisit] });
-    alert("✅ 방문 기록 + 두피 분석 저장 완료!");
-  }
-};
+    if (todayVisit) {
+      await supabase.from("visits").update({
+        scalp_report: allReports,
+      }).eq("id", todayVisit.id);
+      if (onUpdate) onUpdate({ ...customer, visits: [...(customer.visits || []).filter(v => v.id !== todayVisit.id), { ...todayVisit, scalp_report: allReports }] });
+      alert("✅ 두피 분석 결과가 저장됐어요!");
+    } else {
+      const { data: newVisit } = await supabase.from("visits").insert({
+        customer_id: customer.id,
+        date: today,
+        service: "두피 케어",
+        sleep: 50,
+        stress: 50,
+        moisture: 55,
+        elasticity: 50,
+        score: 51,
+        scalp_report: allReports,
+      }).select().single();
+      if (onUpdate) onUpdate({ ...customer, visits: [...(customer.visits || []), newVisit] });
+      alert("✅ 방문 기록 + 두피 분석 저장 완료!");
+    }
+  };
 
+  return (
     <div>
       <Card style={{ marginBottom: 16 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
@@ -380,22 +379,21 @@ const saveReport = async () => {
         </div>
       )}
     </div>
-  ;
+  );
 }
 
 function HistoryTab({ customer, onAddVisit }) {
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [expandedIds, setExpandedIds] = useState([]); // 펼쳐진 카드 ID 목록
+  const [expandedIds, setExpandedIds] = useState([]);
   const [form, setForm] = useState({
     date: new Date().toISOString().slice(0, 10),
     service: "", sleep: 50, stress: 50, moisture: 50, elasticity: 50, note: ""
   });
 
   const visits = Array.isArray(customer.visits) ? customer.visits : [];
-  const reversedVisits = [...visits].reverse(); // 최근 방문이 위로
+  const reversedVisits = [...visits].reverse();
 
-  // 최근 방문(첫 번째)은 기본으로 펼쳐져 있게
   useEffect(() => {
     if (reversedVisits.length > 0) {
       setExpandedIds([reversedVisits[0].id]);
@@ -413,7 +411,7 @@ function HistoryTab({ customer, onAddVisit }) {
         .single();
       if (data) {
         const sleepMap = { "5시간 이하": 30, "5~6시간": 50, "6~7시간": 70, "7시간 이상": 85 };
-        const stressVal = data.stress ? data.stress * 15 : 50;
+        const stressVal = data.stress ? data.stress * 20 : 50;
         const condMap = { "나쁨": 35, "보통": 55, "좋음": 75 };
         setForm(p => ({
           ...p,
@@ -474,7 +472,6 @@ function HistoryTab({ customer, onAddVisit }) {
     if (error) { alert("저장 실패: " + error.message); return; }
     onAddVisit(data);
     setShowForm(false);
-    // 새로 추가된 방문 기록 자동으로 펼치기
     setExpandedIds([data.id]);
   };
 
@@ -487,7 +484,6 @@ function HistoryTab({ customer, onAddVisit }) {
         </Btn>
       </div>
 
-      {/* 방문 추가 폼 */}
       {showForm && (
         <Card style={{ marginBottom: 16, background: C.goldBg, border: `1px solid ${C.goldLight}` }}>
           <h4 style={{ fontSize: 13, fontWeight: 800, marginBottom: 14 }}>새 방문 기록</h4>
@@ -518,7 +514,6 @@ function HistoryTab({ customer, onAddVisit }) {
         </Card>
       )}
 
-      {/* 트렌드 차트 */}
       {visits.length >= 2 && (
         <Card style={{ marginBottom: 16 }}>
           <h4 style={{ fontSize: 13, fontWeight: 800, marginBottom: 14 }}>📊 지표 트렌드</h4>
@@ -540,16 +535,12 @@ function HistoryTab({ customer, onAddVisit }) {
         </Card>
       )}
 
-      {/* 방문 기록 카드 목록 */}
       <div style={{ display: "grid", gap: 10 }}>
         {reversedVisits.map((v, i) => {
           const isExpanded = expandedIds.includes(v.id);
           const isLatest = i === 0;
-
           return (
             <Card key={v.id} style={{ padding: 0, overflow: "hidden" }}>
-
-              {/* 카드 헤더 — 항상 보임 / 클릭하면 접었다 폈다 */}
               <div
                 onClick={() => toggleExpand(v.id)}
                 style={{
@@ -573,11 +564,8 @@ function HistoryTab({ customer, onAddVisit }) {
                 </div>
               </div>
 
-              {/* 카드 상세 — 펼쳤을 때만 보임 */}
               {isExpanded && (
                 <div style={{ padding: "16px 20px" }}>
-
-                  {/* 지표 바 */}
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 10, marginBottom: 16 }}>
                     {["sleep", "stress", "moisture", "elasticity"].map(k => (
                       <div key={k}>
@@ -587,23 +575,17 @@ function HistoryTab({ customer, onAddVisit }) {
                       </div>
                     ))}
                   </div>
-
-                  {/* 메모 */}
                   {v.note && (
                     <p style={{ fontSize: 12, color: C.sub, background: C.bg, padding: "8px 12px", borderRadius: 8, marginBottom: 12 }}>
                       📝 {v.note}
                     </p>
                   )}
-
-                  {/* 두피 분석 결과 */}
                   {v.scalp_report && (
                     <div style={{ background: C.bg, borderRadius: 8, padding: "10px 14px", marginBottom: 12 }}>
                       <p style={{ fontSize: 11, fontWeight: 800, color: C.gold, marginBottom: 6 }}>🔬 두피 분석 결과</p>
                       <p style={{ fontSize: 12, color: C.sub, lineHeight: 1.8, whiteSpace: "pre-wrap" }}>{v.scalp_report}</p>
                     </div>
                   )}
-
-                  {/* 리포트 확인 버튼 */}
                   <button
                     onClick={() => openReport(customer.phone)}
                     style={{
@@ -612,8 +594,7 @@ function HistoryTab({ customer, onAddVisit }) {
                       background: "#fff", color: C.gold,
                       fontSize: 13, fontWeight: 800, fontFamily: "inherit",
                       cursor: "pointer", display: "flex", alignItems: "center",
-                      justifyContent: "center", gap: 6,
-                      transition: "all 0.18s",
+                      justifyContent: "center", gap: 6, transition: "all 0.18s",
                     }}
                     onMouseEnter={e => { e.currentTarget.style.background = C.goldBg; }}
                     onMouseLeave={e => { e.currentTarget.style.background = "#fff"; }}
@@ -625,7 +606,6 @@ function HistoryTab({ customer, onAddVisit }) {
             </Card>
           );
         })}
-
         {visits.length === 0 && (
           <div style={{ textAlign: "center", padding: 40, color: C.muted }}>
             아직 방문 기록이 없습니다.
@@ -636,20 +616,16 @@ function HistoryTab({ customer, onAddVisit }) {
   );
 }
 
-// KakaoTab 전체 교체 (556번 ~ 768번 줄 대체)
-
 function KakaoTab({ customer }) {
   const visits = Array.isArray(customer.visits) ? customer.visits : [];
-  const reversedVisits = [...visits].reverse(); // 최근 방문이 위로
+  const reversedVisits = [...visits].reverse();
 
-  const [selectedVisitId, setSelectedVisitId] = useState(
-    reversedVisits[0]?.id ?? null
-  );
+  const [selectedVisitId, setSelectedVisitId] = useState(reversedVisits[0]?.id ?? null);
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
   const [sendError, setSendError] = useState("");
 
-const selectedVisit = visits.find(v => String(v.id) === String(selectedVisitId)) ?? null;
+  const selectedVisit = visits.find(v => String(v.id) === String(selectedVisitId)) ?? null;
 
   const openReport = () => {
     const url = `${window.location.origin}/report?phone=${encodeURIComponent(customer.phone)}`;
@@ -659,13 +635,10 @@ const selectedVisit = visits.find(v => String(v.id) === String(selectedVisitId))
   const sendAlimtalk = async () => {
     if (!selectedVisit) return alert("방문 기록을 선택해주세요.");
     if (!customer.phone) return alert("고객 전화번호가 없습니다.");
-
     setSending(true);
     setSendError("");
     setSent(false);
-
     const reportUrl = `${window.location.origin}/report?phone=${encodeURIComponent(customer.phone)}`;
-
     try {
       const res = await fetch("/api/sendAlimtalk", {
         method: "POST",
@@ -682,18 +655,9 @@ const selectedVisit = visits.find(v => String(v.id) === String(selectedVisitId))
           reportUrl,
         }),
       });
-
       const result = await res.json();
-
-      if (res.ok && result.success) {
-        setSent(true);
-      } else {
-        setSendError(result.error || "알림톡 발송에 실패했습니다.");
-      }
-    } catch (e) {
-      setSendError("네트워크 오류: " + e.message);
-    }
-
+      if (res.ok && result.success) { setSent(true); } else { setSendError(result.error || "알림톡 발송에 실패했습니다."); }
+    } catch (e) { setSendError("네트워크 오류: " + e.message); }
     setSending(false);
   };
 
@@ -717,50 +681,27 @@ const selectedVisit = visits.find(v => String(v.id) === String(selectedVisitId))
 
   return (
     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-
-      {/* 왼쪽: 컨트롤 */}
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-
-        {/* 방문 날짜 선택 */}
         <Card>
           <h3 style={{ fontSize: 14, fontWeight: 800, marginBottom: 12 }}>📅 방문 날짜 선택</h3>
           <select
             value={selectedVisitId ?? ""}
-            onChange={e => {
-              setSelectedVisitId(Number(e.target.value));
-              setSent(false);
-              setSendError("");
-            }}
-            style={{
-              width: "100%", padding: "11px 14px",
-              border: `1.5px solid ${C.gold}`, borderRadius: 10,
-              fontSize: 14, fontFamily: "inherit", fontWeight: 700,
-              color: C.text, background: C.goldBg, outline: "none",
-              cursor: "pointer",
-            }}
+            onChange={e => { setSelectedVisitId(Number(e.target.value)); setSent(false); setSendError(""); }}
+            style={{ width: "100%", padding: "11px 14px", border: `1.5px solid ${C.gold}`, borderRadius: 10, fontSize: 14, fontFamily: "inherit", fontWeight: 700, color: C.text, background: C.goldBg, outline: "none", cursor: "pointer" }}
           >
             {reversedVisits.map((v, i) => (
-              <option key={v.id} value={v.id}>
-                {v.date} · {v.score}점 {i === 0 ? "(최근)" : ""}
-              </option>
+              <option key={v.id} value={v.id}>{v.date} · {v.score}점 {i === 0 ? "(최근)" : ""}</option>
             ))}
           </select>
         </Card>
 
-        {/* 선택한 방문 요약 */}
         {selectedVisit && (
           <Card>
             <h3 style={{ fontSize: 14, fontWeight: 800, marginBottom: 14 }}>📊 방문 요약</h3>
-
-            {/* 점수 */}
             <div style={{ textAlign: "center", marginBottom: 16 }}>
-              <p style={{ fontSize: 36, fontWeight: 900, color: selectedVisit.score >= 70 ? C.green : selectedVisit.score >= 50 ? "#b07800" : C.red }}>
-                {selectedVisit.score}점
-              </p>
+              <p style={{ fontSize: 36, fontWeight: 900, color: selectedVisit.score >= 70 ? C.green : selectedVisit.score >= 50 ? "#b07800" : C.red }}>{selectedVisit.score}점</p>
               <p style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>{selectedVisit.date} · {selectedVisit.service || "두피 케어"}</p>
             </div>
-
-            {/* 지표 */}
             <div style={{ display: "grid", gap: 10 }}>
               {["sleep", "stress", "moisture", "elasticity"].map(k => (
                 <div key={k}>
@@ -775,11 +716,8 @@ const selectedVisit = visits.find(v => String(v.id) === String(selectedVisitId))
           </Card>
         )}
 
-        {/* 버튼들 */}
         <Card>
           <h3 style={{ fontSize: 14, fontWeight: 800, marginBottom: 12 }}>📨 발송</h3>
-
-          {/* 고객 정보 */}
           <div style={{ background: C.goldBg, border: `1px solid ${C.goldLight}`, borderRadius: 10, padding: "12px 16px", marginBottom: 14 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <div>
@@ -789,48 +727,18 @@ const selectedVisit = visits.find(v => String(v.id) === String(selectedVisitId))
               {selectedVisit && <Chip score={selectedVisit.score} />}
             </div>
           </div>
-
-          {/* 리포트 확인 버튼 */}
-          <button
-            onClick={openReport}
-            style={{
-              width: "100%", padding: "12px", borderRadius: 10, marginBottom: 10,
-              border: `1.5px solid ${C.gold}`, background: "#fff",
-              color: C.gold, fontSize: 13, fontWeight: 800,
-              fontFamily: "inherit", cursor: "pointer",
-              display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-            }}
-            onMouseEnter={e => e.currentTarget.style.background = C.goldBg}
-            onMouseLeave={e => e.currentTarget.style.background = "#fff"}
-          >
+          <button onClick={openReport} style={{ width: "100%", padding: "12px", borderRadius: 10, marginBottom: 10, border: `1.5px solid ${C.gold}`, background: "#fff", color: C.gold, fontSize: 13, fontWeight: 800, fontFamily: "inherit", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }} onMouseEnter={e => e.currentTarget.style.background = C.goldBg} onMouseLeave={e => e.currentTarget.style.background = "#fff"}>
             📋 리포트 확인 (새탭)
           </button>
-
-          {/* 알림톡 발송 버튼 */}
-          <button
-            onClick={sendAlimtalk}
-            disabled={sending || !selectedVisit}
-            style={{
-              width: "100%", padding: "12px", borderRadius: 10,
-              border: "none", background: sending ? C.border : C.kakao,
-              color: "#3a1d00", fontSize: 13, fontWeight: 800,
-              fontFamily: "inherit", cursor: sending ? "not-allowed" : "pointer",
-              display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-              opacity: sending ? 0.7 : 1,
-            }}
-          >
+          <button onClick={sendAlimtalk} disabled={sending || !selectedVisit} style={{ width: "100%", padding: "12px", borderRadius: 10, border: "none", background: sending ? C.border : C.kakao, color: "#3a1d00", fontSize: 13, fontWeight: 800, fontFamily: "inherit", cursor: sending ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, opacity: sending ? 0.7 : 1 }}>
             {sending ? "📤 발송 중..." : "📨 카카오 알림톡 발송"}
           </button>
-
-          {/* 성공 */}
           {sent && (
             <div style={{ marginTop: 12, background: "#edf7f1", border: "1px solid #a8d5b5", borderRadius: 10, padding: "12px 16px", textAlign: "center" }}>
               <p style={{ color: C.green, fontWeight: 800 }}>✅ 알림톡 발송 완료!</p>
               <p style={{ color: C.sub, fontSize: 12, marginTop: 3 }}>{customer.name}님께 리포트 링크 전송됨</p>
             </div>
           )}
-
-          {/* 오류 */}
           {sendError && (
             <div style={{ marginTop: 12, background: "#fff0f0", border: "1px solid #f5c0c0", borderRadius: 10, padding: "12px 16px" }}>
               <p style={{ color: C.red, fontSize: 12, fontWeight: 700 }}>⚠️ 발송 실패</p>
@@ -840,27 +748,16 @@ const selectedVisit = visits.find(v => String(v.id) === String(selectedVisitId))
         </Card>
       </div>
 
-      {/* 오른쪽: 리포트 미리보기 */}
       <Card>
         <h3 style={{ fontSize: 14, fontWeight: 800, marginBottom: 16 }}>📱 리포트 미리보기</h3>
-
         {selectedVisit ? (
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-
-            {/* 고객명 + 점수 */}
             <div style={{ background: C.goldBg, border: `1px solid ${C.goldLight}`, borderRadius: 12, padding: "16px", textAlign: "center" }}>
               <p style={{ fontSize: 18, fontWeight: 900 }}>{customer.name}님</p>
               <p style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>{selectedVisit.date} · {customer.stylist} 스타일리스트</p>
-              <p style={{
-                fontSize: 32, fontWeight: 900, marginTop: 10,
-                color: selectedVisit.score >= 70 ? C.green : selectedVisit.score >= 50 ? "#b07800" : C.red
-              }}>{selectedVisit.score}점</p>
-              <p style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>
-                {selectedVisit.score >= 70 ? "두피 상태가 양호해요 👍" : selectedVisit.score >= 50 ? "조금 더 관리가 필요해요 💆" : "집중 케어가 필요해요 ⚠️"}
-              </p>
+              <p style={{ fontSize: 32, fontWeight: 900, marginTop: 10, color: selectedVisit.score >= 70 ? C.green : selectedVisit.score >= 50 ? "#b07800" : C.red }}>{selectedVisit.score}점</p>
+              <p style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>{selectedVisit.score >= 70 ? "두피 상태가 양호해요 👍" : selectedVisit.score >= 50 ? "조금 더 관리가 필요해요 💆" : "집중 케어가 필요해요 ⚠️"}</p>
             </div>
-
-            {/* 지표 */}
             <div style={{ background: C.bg, borderRadius: 12, padding: 16 }}>
               <p style={{ fontSize: 12, fontWeight: 800, marginBottom: 12 }}>📊 상세 지표</p>
               {["sleep", "stress", "moisture", "elasticity"].map(k => (
@@ -873,28 +770,19 @@ const selectedVisit = visits.find(v => String(v.id) === String(selectedVisitId))
                 </div>
               ))}
             </div>
-
-            {/* AI 두피 분석 */}
             {selectedVisit.scalp_report && (
               <div style={{ background: C.bg, borderRadius: 12, padding: 16 }}>
                 <p style={{ fontSize: 12, fontWeight: 800, marginBottom: 8, color: C.gold }}>🔬 AI 두피 분석</p>
-                <p style={{ fontSize: 11, color: C.sub, lineHeight: 1.8, whiteSpace: "pre-wrap" }}>
-                  {selectedVisit.scalp_report.slice(0, 200)}...
-                </p>
+                <p style={{ fontSize: 11, color: C.sub, lineHeight: 1.8, whiteSpace: "pre-wrap" }}>{selectedVisit.scalp_report.slice(0, 200)}...</p>
               </div>
             )}
-
-            {/* 메모 */}
             {selectedVisit.note && (
               <div style={{ background: C.bg, borderRadius: 12, padding: 16 }}>
                 <p style={{ fontSize: 12, fontWeight: 800, marginBottom: 8 }}>📝 스타일리스트 메모</p>
                 <p style={{ fontSize: 12, color: C.sub, lineHeight: 1.8 }}>{selectedVisit.note}</p>
               </div>
             )}
-
-            <p style={{ fontSize: 11, color: C.muted, textAlign: "center" }}>
-              🧴 AI 제품 추천은 제품 등록 후 추가될 예정이에요
-            </p>
+            <p style={{ fontSize: 11, color: C.muted, textAlign: "center" }}>🧴 AI 제품 추천은 제품 등록 후 추가될 예정이에요</p>
           </div>
         ) : (
           <div style={{ textAlign: "center", padding: "60px 0", color: C.muted }}>
@@ -909,16 +797,16 @@ const selectedVisit = visits.find(v => String(v.id) === String(selectedVisitId))
 
 function CustomerDetail({ customer, onBack, onUpdate, onDeleteCustomer }) {
   const [tab, setTab] = useState("scalp");
-  const [kakaoMsg, setKakaoMsg] = useState("");
   const TABS = [{ id: "scalp", label: "🔬 두피 분석" }, { id: "history", label: "📅 방문 히스토리" }, { id: "kakao", label: "💬 카카오 발송" }];
   const visits = Array.isArray(customer.visits) ? customer.visits : [];
   const latest = visits[visits.length - 1];
+
   const deleteCustomer = async () => {
-  if (!window.confirm(`${customer.name}님을 삭제할까요? 방문 기록도 모두 삭제됩니다.`)) return;
-  await supabase.from("visits").delete().eq("customer_id", customer.id);
-  await supabase.from("customers").delete().eq("id", customer.id);
-  onDeleteCustomer(customer.id);
-};
+    if (!window.confirm(`${customer.name}님을 삭제할까요? 방문 기록도 모두 삭제됩니다.`)) return;
+    await supabase.from("visits").delete().eq("customer_id", customer.id);
+    await supabase.from("customers").delete().eq("id", customer.id);
+    onDeleteCustomer(customer.id);
+  };
 
   return (
     <div>
@@ -977,13 +865,17 @@ export default function App() {
             <div style={{ width: 32, height: 32, borderRadius: 9, background: C.gold, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15 }}>✦</div>
             <div><p style={{ fontSize: 13, fontWeight: 900 }}>{SHOP.name}</p><p style={{ fontSize: 9, color: C.muted, letterSpacing: "0.08em" }}>HAIRCARE HEALTH PLATFORM</p></div>
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}><div style={{ width: 8, height: 8, borderRadius: "50%", background: C.green }} /><span style={{ fontSize: 12, color: C.muted }}>DB 연결됨</span><Btn variant="ghost" size="sm" onClick={() => setLoggedIn(false)}>로그아웃</Btn></div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{ width: 8, height: 8, borderRadius: "50%", background: C.green }} />
+            <span style={{ fontSize: 12, color: C.muted }}>DB 연결됨</span>
+            <Btn variant="ghost" size="sm" onClick={() => setLoggedIn(false)}>로그아웃</Btn>
+          </div>
         </div>
       </div>
       <div style={{ maxWidth: 980, margin: "0 auto", padding: "28px 24px 60px" }}>
         {page === "list" && <CustomerList customers={customers} onSelect={c => { setSelected(c); setPage("detail"); }} onAdd={() => setPage("add")} loading={loading} />}
         {page === "add" && <AddCustomer onSave={c => { setCustomers(p => [c, ...p]); setPage("list"); }} onCancel={() => setPage("list")} />}
-    {page === "detail" && selected && customers.find(c => c.id === selected.id) && <CustomerDetail customer={customers.find(c => c.id === selected.id)} onBack={() => setPage("list")} onUpdate={updateCustomer} onDeleteCustomer={id => { setCustomers(prev => prev.filter(c => c.id !== id)); setPage("list"); }} />}
+        {page === "detail" && selected && customers.find(c => c.id === selected.id) && <CustomerDetail customer={customers.find(c => c.id === selected.id)} onBack={() => setPage("list")} onUpdate={updateCustomer} onDeleteCustomer={id => { setCustomers(prev => prev.filter(c => c.id !== id)); setPage("list"); }} />}
       </div>
     </div>
   );
