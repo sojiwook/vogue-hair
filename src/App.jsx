@@ -238,78 +238,40 @@ function ScalpTab({ customer, onUpdate }) {
     return <p key={i} style={{ fontSize: 13, lineHeight: 1.8, color: C.sub, margin: "2px 0" }} dangerouslySetInnerHTML={{ __html: html }} />;
   });
 
-  const saveReport = async () => {
-    const allReports = images
-      .filter(im => im.done && im.report)
-      .map(im => "[" + im.label + "]\n" + im.report)
-      .join("\n\n---\n\n");
+ const saveReport = async () => {
+  const allReports = images
+    .filter(im => im.done && im.report)
+    .map(im => "[" + im.label + "]\n" + im.report)
+    .join("\n\n---\n\n");
 
-    let latest = customer.visits?.[customer.visits.length - 1];
+  const today = new Date().toISOString().slice(0, 10);
 
-    // 방문 기록 없으면 자동 생성
-    if (!latest) {
-      const { data: survey } = await supabase
-        .from("surveys")
-        .select("*")
-        .eq("phone", customer.phone)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .single();
+  // 오늘 날짜 방문 기록 찾기
+  const todayVisit = customer.visits?.find(v => v.date === today);
 
-      const sleepMap = { "5시간 이하": 30, "5~6시간": 50, "6~7시간": 70, "7시간 이상": 85 };
-      const sleep = sleepMap[survey?.sleep] || 50;
-      const stressVal = survey?.stress ? survey.stress * 20 : 50;
-      const moisture = survey?.condition === "좋음" ? 75 : survey?.condition === "보통" ? 55 : 35;
-      const elasticity = 50;
-      const score = Math.round(sleep * 0.2 + (100 - stressVal) * 0.2 + moisture * 0.3 + elasticity * 0.3);
-
-      const { data: newVisit } = await supabase
-        .from("visits")
-        .insert({
-          customer_id: customer.id,
-          date: new Date().toISOString().slice(0, 10),
-          service: "두피 케어",
-          sleep,
-          stress: stressVal,
-          moisture,
-          elasticity,
-          score,
-          scalp_report: allReports,
-        })
-        .select()
-        .single();
-
-      if (onUpdate) onUpdate({ ...customer, visits: [...(customer.visits || []), newVisit] });
-      alert("✅ 방문 기록 자동 생성 + 두피 분석 저장 완료!");
-      return;
-    }
-
-    // 방문 기록 있으면 업데이트
-// 방문 기록 있으면 업데이트
-const { data: survey2 } = await supabase
-  .from("surveys")
-  .select("*")
-  .eq("phone", customer.phone)
-  .order("created_at", { ascending: false })
-  .limit(1)
-  .single();
-
-const sleepMap2 = { "5시간 이하": 30, "5~6시간": 50, "6~7시간": 70, "7시간 이상": 85 };
-const sleep2 = sleepMap2[survey2?.sleep] || latest.sleep;
-const stressVal2 = survey2?.stress ? survey2.stress * 20 : latest.stress;
-const moisture2 = survey2?.condition === "좋음" ? 75 : survey2?.condition === "보통" ? 55 : survey2?.condition === "나쁨" ? 35 : latest.moisture;
-const score2 = Math.round(sleep2 * 0.2 + (100 - stressVal2) * 0.2 + moisture2 * 0.3 + latest.elasticity * 0.3);
-
-await supabase.from("visits").update({ 
-  scalp_report: allReports,
-  sleep: sleep2,
-  stress: stressVal2,
-  moisture: moisture2,
-  score: score2,
-}).eq("id", latest.id);
+  if (todayVisit) {
+    // 오늘 방문 기록 있으면 scalp_report만 업데이트
+    await supabase.from("visits").update({
+      scalp_report: allReports,
+    }).eq("id", todayVisit.id);
     alert("✅ 두피 분석 결과가 저장됐어요!");
-  };
-
+  } else {
+    // 오늘 방문 기록 없으면 새로 생성
+    const { data: newVisit } = await supabase.from("visits").insert({
+      customer_id: customer.id,
+      date: today,
+      service: "두피 케어",
+      sleep: 50,
+      stress: 50,
+      moisture: 55,
+      elasticity: 50,
+      score: 51,
+      scalp_report: allReports,
+    }).select().single();
+    if (onUpdate) onUpdate({ ...customer, visits: [...(customer.visits || []), newVisit] });
+    alert("✅ 방문 기록 + 두피 분석 저장 완료!");
+  }
+};
   return (
     <div>
       <Card style={{ marginBottom: 16 }}>
