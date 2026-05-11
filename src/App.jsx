@@ -238,7 +238,7 @@ function ScalpTab({ customer, onUpdate }) {
     return <p key={i} style={{ fontSize: 13, lineHeight: 1.8, color: C.sub, margin: "2px 0" }} dangerouslySetInnerHTML={{ __html: html }} />;
   });
 
- const saveReport = async () => {
+const saveReport = async () => {
   const allReports = images
     .filter(im => im.done && im.report)
     .map(im => "[" + im.label + "]\n" + im.report)
@@ -246,14 +246,20 @@ function ScalpTab({ customer, onUpdate }) {
 
   const today = new Date().toISOString().slice(0, 10);
 
-  // 오늘 날짜 방문 기록 찾기
-  const todayVisit = customer.visits?.find(v => v.date === today);
+  // 메모리 말고 DB에서 직접 오늘 방문 기록 조회
+  const { data: todayVisit } = await supabase
+    .from("visits")
+    .select("*")
+    .eq("customer_id", customer.id)
+    .eq("date", today)
+    .maybeSingle();
 
   if (todayVisit) {
     // 오늘 방문 기록 있으면 scalp_report만 업데이트
     await supabase.from("visits").update({
       scalp_report: allReports,
     }).eq("id", todayVisit.id);
+    if (onUpdate) onUpdate({ ...customer, visits: [...(customer.visits || []).filter(v => v.id !== todayVisit.id), { ...todayVisit, scalp_report: allReports }] });
     alert("✅ 두피 분석 결과가 저장됐어요!");
   } else {
     // 오늘 방문 기록 없으면 새로 생성
@@ -272,7 +278,7 @@ function ScalpTab({ customer, onUpdate }) {
     alert("✅ 방문 기록 + 두피 분석 저장 완료!");
   }
 };
-  return (
+
     <div>
       <Card style={{ marginBottom: 16 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
