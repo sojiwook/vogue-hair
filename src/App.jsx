@@ -28,11 +28,24 @@ async function callAI(prompt, imgBase64, imgType, onChunk, label, customerName, 
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
+
+  // res.json() 직접 호출 시 빈 body나 HTML 에러 페이지면 "Unexpected end of JSON input" 발생
+  // text()로 먼저 읽고 JSON 파싱을 별도로 처리
+  const raw = await res.text();
+
   if (!res.ok) {
-    const err = await res.json();
-    throw new Error(err.error || `API 오류: ${res.status}`);
+    let errMsg = `API 오류: ${res.status}`;
+    try { errMsg = JSON.parse(raw)?.error || errMsg; } catch {}
+    throw new Error(errMsg);
   }
-  const data = await res.json();
+
+  let data;
+  try {
+    data = JSON.parse(raw);
+  } catch {
+    throw new Error(`서버 응답을 파싱할 수 없습니다 (${res.status})`);
+  }
+
   onChunk(data.result || "");
 }
 
