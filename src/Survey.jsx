@@ -15,7 +15,6 @@ const C = {
   green: "#3a8c5c", red: "#d94f4f",
 };
 
-// 생년월일 → 나이 계산
 function calcAge(birthDate) {
   if (!birthDate) return 0;
   const today = new Date();
@@ -66,64 +65,71 @@ export default function Survey() {
     }));
   };
 
-  // ─── 제출 ─────────────────────────────────────────────────────────
   const submit = async () => {
     setSaving(true);
+    console.log("[Survey] submit 시작 — form:", { sleep: form.sleep, stress: form.stress, condition: form.condition, phone: form.phone });
 
-    // 1. surveys 테이블 저장
-   const { data: existingSurvey } = await supabase
-  .from("surveys")
-  .select("id")
-  .eq("phone", form.phone)
-  .maybeSingle();
+    const sleepMap = { "5시간 이하": 30, "5~6시간": 50, "6~7시간": 70, "7시간 이상": 85 };
+    const condMap = { "나쁨": 35, "보통": 55, "좋음": 75 };
 
-if (existingSurvey) {
-  await supabase.from("surveys").update({
-    name: form.name,
-    sleep: form.sleep,
-    stress: form.stress,
-    condition: form.condition,
-    scalp_concerns: form.scalp_concerns,
-    shampoo_frequency: form.shampoo_frequency,
-    scalp_type: form.scalp_type,
-  }).eq("phone", form.phone);
-} else {
-  await supabase.from("surveys").insert({
-    name: form.name,
-    phone: form.phone,
-    sleep: form.sleep,
-    stress: form.stress,
-    condition: form.condition,
-    scalp_concerns: form.scalp_concerns,
-    shampoo_frequency: form.shampoo_frequency,
-    scalp_type: form.scalp_type,
-  });
-}
+    // 1. surveys 저장
+    const { data: existingSurveys, error: surveyQueryErr } = await supabase
+      .from("surveys")
+      .select("id")
+      .eq("phone", form.phone)
+      .order("created_at", { ascending: false })
+      .limit(1);
+    console.log("[Survey] 기존 survey 조회:", existingSurveys, "error:", surveyQueryErr);
+    const existingSurvey = existingSurveys?.[0] ?? null;
 
-    // 2. customers 테이블 자동 등록 or 업데이트
+    if (existingSurvey) {
+      const { error: surveyUpdateErr } = await supabase.from("surveys").update({
+        name: form.name,
+        sleep: form.sleep,
+        stress: form.stress,
+        condition: form.condition,
+        scalp_concerns: form.scalp_concerns,
+        shampoo_frequency: form.shampoo_frequency,
+        scalp_type: form.scalp_type,
+      }).eq("id", existingSurvey.id);
+      console.log("[Survey] survey UPDATE error:", surveyUpdateErr);
+    } else {
+      const { error: surveyInsertErr } = await supabase.from("surveys").insert({
+        name: form.name,
+        phone: form.phone,
+        sleep: form.sleep,
+        stress: form.stress,
+        condition: form.condition,
+        scalp_concerns: form.scalp_concerns,
+        shampoo_frequency: form.shampoo_frequency,
+        scalp_type: form.scalp_type,
+      });
+      console.log("[Survey] survey INSERT error:", surveyInsertErr);
+    }
+
+    // 2. customers 저장
     const age = calcAge(form.birth_date);
-
-    const { data: existing } = await supabase
+    const { data: existingCustomers, error: customerQueryErr } = await supabase
       .from("customers")
       .select("*")
       .eq("phone", form.phone)
-      .single();
+      .limit(1);
+    console.log("[Survey] 기존 customer 조회:", existingCustomers, "error:", customerQueryErr);
+    const existing = existingCustomers?.[0] ?? null;
 
+    let customerId;
     if (existing) {
-      // 기존 고객 → 업데이트
-      await supabase
-        .from("customers")
-        .update({
-          stylist: form.stylist,
-          gender: form.gender,
-          birth_date: form.birth_date || null,
-          age,
-          marketing_agree: form.marketing_agree,
-        })
-        .eq("phone", form.phone);
+      await supabase.from("customers").update({
+        stylist: form.stylist,
+        gender: form.gender,
+        birth_date: form.birth_date || null,
+        age,
+        marketing_agree: form.marketing_agree,
+      }).eq("id", existing.id);
+      customerId = existing.id;
+      console.log("[Survey] customer UPDATE — customerId:", customerId);
     } else {
-      // 신규 고객 → 자동 등록
-      await supabase.from("customers").insert({
+      const { data: newCustomer, error: customerInsertErr } = await supabase.from("customers").insert({
         name: form.name,
         phone: form.phone,
         stylist: form.stylist,
@@ -133,54 +139,99 @@ if (existingSurvey) {
         marketing_agree: form.marketing_agree,
         join_date: new Date().toISOString().slice(0, 10),
         memo: "",
-      });
+      }).select().single();
+      console.log("[Survey] customer INSERT — newCustomer:", newCustomer, "error:", customerInsertErr);
+      customerId = newCustomer?.id;
+    }
+
+    if (!customerId) {
+      console.error("[Survey] customerId 없음 — 종료");
+      setSaving(false);
+      alert("고객 정보 저장에 실패했습니다. 다시 시도해주세요.");
+      return;
+    }
+
+    // 3. surveys 테이블에서 phone 기준으로 최신 문진 값 재조회 (.single() 제거 — 중복 행 있어도 안전)
+    const { data: surveyRows, error: surveyRowErr } = await supabase
+      .from("surveys")
+      .select("sleep, stress, condition")
+      .eq("phone", form.phone)
+      .order("created_at", { ascending: false })
+      .limit(1);
+    const surveyRow = surveyRows?.[0] ?? null;
+    console.log("[Survey] surveyRow 재조회:", surveyRow, "error:", surveyRowErr);
+
+    const sleepVal = sleepMap[surveyRow?.sleep] ?? sleepMap[form.sleep] ?? 50;
+    const stressVal = Number(surveyRow?.stress ?? form.stress) * 20;
+    const moistVal = condMap[surveyRow?.condition] ?? condMap[form.condition] ?? 55;
+    const elasticity = 50;
+    const score = Math.round(
+      sleepVal * 0.2 + (100 - stressVal) * 0.2 + moistVal * 0.3 + elasticity * 0.3
+    );
+    console.log("[Survey] 계산된 값 — sleepVal:", sleepVal, "stressVal:", stressVal, "moistVal:", moistVal, "score:", score);
+
+    // 4. visits 생성 또는 업데이트 — 로컬 날짜 사용 (UTC 기준이면 KST 오전 9시 이전에 전날 날짜가 들어가는 버그)
+    const _d = new Date();
+    const today = `${_d.getFullYear()}-${String(_d.getMonth() + 1).padStart(2, '0')}-${String(_d.getDate()).padStart(2, '0')}`;
+    console.log("[Survey] today (로컬):", today);
+    const { data: todayVisits, error: todayVisitsErr } = await supabase
+      .from("visits")
+      .select("id")
+      .eq("customer_id", customerId)
+      .eq("date", today)
+      .limit(1);
+    console.log("[Survey] 오늘 visit 조회 (customer_id:", customerId, ", date:", today, "):", todayVisits, "error:", todayVisitsErr);
+    const todayVisit = todayVisits?.[0] ?? null;
+
+    if (!todayVisit) {
+      const { data: insertedVisit, error: visitInsertErr } = await supabase.from("visits").insert({
+        customer_id: customerId,
+        date: today,
+        service: "두피 케어",
+        sleep: sleepVal,
+        stress: stressVal,
+        moisture: moistVal,
+        elasticity,
+        score,
+      }).select().single();
+      console.log("[Survey] visit INSERT — 결과:", insertedVisit, "error:", visitInsertErr);
+    } else {
+      const { data: updatedVisit, error: visitUpdateErr } = await supabase.from("visits").update({
+        sleep: sleepVal,
+        stress: stressVal,
+        moisture: moistVal,
+        score,
+      }).eq("id", todayVisit.id).select().single();
+      console.log("[Survey] visit UPDATE (id:", todayVisit.id, ") — 결과:", updatedVisit, "error:", visitUpdateErr);
     }
 
     setSaving(false);
     setDone(true);
   };
 
-  // ─── 스텝 정의 ────────────────────────────────────────────────────
   const steps = [
-    // 0: 기본 정보
     {
-      title: "기본 정보",
-      emoji: "👤",
+      title: "기본 정보", emoji: "👤",
       content: (
         <div style={{ display: "grid", gap: 16 }}>
-
-          {/* 이름 */}
           <div>
             <label style={{ fontSize: 13, color: C.sub, display: "block", marginBottom: 6, fontWeight: 600 }}>이름 *</label>
             <input value={form.name} onChange={e => set("name", e.target.value)} placeholder="홍길동"
               style={{ width: "100%", padding: "12px 16px", border: `1.5px solid ${C.border}`, borderRadius: 10, fontSize: 15, fontFamily: "inherit", outline: "none", boxSizing: "border-box" }} />
           </div>
-
-          {/* 전화번호 */}
           <div>
             <label style={{ fontSize: 13, color: C.sub, display: "block", marginBottom: 6, fontWeight: 600 }}>전화번호 *</label>
             <input value={form.phone} onChange={e => set("phone", e.target.value)} placeholder="010-0000-0000"
               style={{ width: "100%", padding: "12px 16px", border: `1.5px solid ${C.border}`, borderRadius: 10, fontSize: 15, fontFamily: "inherit", outline: "none", boxSizing: "border-box" }} />
           </div>
-
-          {/* 생년월일 + 나이 자동 표시 */}
           <div>
             <label style={{ fontSize: 13, color: C.sub, display: "block", marginBottom: 6, fontWeight: 600 }}>
               생년월일
-              {form.birth_date && (
-                <span style={{ marginLeft: 8, color: C.gold, fontWeight: 800 }}>
-                  ({calcAge(form.birth_date)}세)
-                </span>
-              )}
+              {form.birth_date && <span style={{ marginLeft: 8, color: C.gold, fontWeight: 800 }}>({calcAge(form.birth_date)}세)</span>}
             </label>
-            <input
-              type="date" value={form.birth_date}
-              onChange={e => set("birth_date", e.target.value)}
-              style={{ width: "100%", padding: "12px 16px", border: `1.5px solid ${C.border}`, borderRadius: 10, fontSize: 15, fontFamily: "inherit", outline: "none", boxSizing: "border-box" }}
-            />
+            <input type="date" value={form.birth_date} onChange={e => set("birth_date", e.target.value)}
+              style={{ width: "100%", padding: "12px 16px", border: `1.5px solid ${C.border}`, borderRadius: 10, fontSize: 15, fontFamily: "inherit", outline: "none", boxSizing: "border-box" }} />
           </div>
-
-          {/* 성별 */}
           <div>
             <label style={{ fontSize: 13, color: C.sub, display: "block", marginBottom: 10, fontWeight: 600 }}>성별</label>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
@@ -190,8 +241,7 @@ if (existingSurvey) {
                   border: `1.5px solid ${form.gender === g ? C.gold : C.border}`,
                   background: form.gender === g ? C.goldBg : "#fff",
                   color: form.gender === g ? C.gold : C.text,
-                  fontFamily: "inherit", fontSize: 15,
-                  fontWeight: form.gender === g ? 800 : 400,
+                  fontFamily: "inherit", fontSize: 15, fontWeight: form.gender === g ? 800 : 400,
                   cursor: "pointer", transition: "all 0.15s", textAlign: "center",
                 }}>
                   {g === "여성" ? "👩 " : "👨 "}{form.gender === g ? "✓ " : ""}{g}
@@ -199,8 +249,6 @@ if (existingSurvey) {
               ))}
             </div>
           </div>
-
-          {/* 담당 스타일리스트 */}
           <div>
             <label style={{ fontSize: 13, color: C.sub, display: "block", marginBottom: 10, fontWeight: 600 }}>담당 스타일리스트 *</label>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
@@ -210,8 +258,7 @@ if (existingSurvey) {
                   border: `1.5px solid ${form.stylist === s ? C.gold : C.border}`,
                   background: form.stylist === s ? C.goldBg : "#fff",
                   color: form.stylist === s ? C.gold : C.text,
-                  fontFamily: "inherit", fontSize: 15,
-                  fontWeight: form.stylist === s ? 800 : 400,
+                  fontFamily: "inherit", fontSize: 15, fontWeight: form.stylist === s ? 800 : 400,
                   cursor: "pointer", transition: "all 0.15s", textAlign: "center",
                 }}>
                   {form.stylist === s ? "✓ " : ""}{s}
@@ -223,8 +270,6 @@ if (existingSurvey) {
       ),
       canNext: form.name && form.phone && form.stylist,
     },
-
-    // 1: 수면
     {
       title: "수면", emoji: "😴", desc: "요즘 평균 수면 시간은?",
       content: (
@@ -236,8 +281,6 @@ if (existingSurvey) {
       ),
       canNext: form.sleep,
     },
-
-    // 2: 스트레스
     {
       title: "스트레스", emoji: "🧠", desc: "지난 1주일 스트레스 강도는?",
       content: (
@@ -265,8 +308,6 @@ if (existingSurvey) {
       ),
       canNext: form.stress > 0,
     },
-
-    // 3: 몸 컨디션
     {
       title: "몸 컨디션", emoji: "💪", desc: "요즘 전반적인 몸 상태는?",
       content: (
@@ -278,8 +319,6 @@ if (existingSurvey) {
       ),
       canNext: form.condition,
     },
-
-    // 4: 두피 고민
     {
       title: "두피 고민", emoji: "🔬", desc: "신경 쓰이는 두피/모발 고민은? (복수 선택 가능)",
       content: (
@@ -291,8 +330,6 @@ if (existingSurvey) {
       ),
       canNext: form.scalp_concerns.length > 0,
     },
-
-    // 5: 샴푸 주기
     {
       title: "샴푸 주기", emoji: "🚿", desc: "머리를 얼마나 자주 감으시나요?",
       content: (
@@ -304,8 +341,6 @@ if (existingSurvey) {
       ),
       canNext: form.shampoo_frequency,
     },
-
-    // 6: 두피 타입
     {
       title: "두피 타입", emoji: "💆", desc: "본인이 느끼는 두피 타입은?",
       content: (
@@ -317,14 +352,10 @@ if (existingSurvey) {
       ),
       canNext: form.scalp_type,
     },
-
-    // 7: 마케팅 동의
     {
-      title: "약관 동의",
-      emoji: "📋",
+      title: "약관 동의", emoji: "📋",
       content: (
         <div style={{ display: "grid", gap: 14 }}>
-          {/* 개인정보 수집 (필수) */}
           <div style={{ background: C.bg, borderRadius: 12, padding: 16 }}>
             <p style={{ fontSize: 13, fontWeight: 800, marginBottom: 6 }}>개인정보 수집 및 이용 동의 (필수)</p>
             <p style={{ fontSize: 12, color: C.muted, lineHeight: 1.8, marginBottom: 10 }}>
@@ -336,17 +367,11 @@ if (existingSurvey) {
               ✓ 서비스 이용을 위해 필수 동의됩니다
             </div>
           </div>
-
-          {/* 마케팅 동의 (선택) */}
-          <div
-            onClick={() => set("marketing_agree", !form.marketing_agree)}
-            style={{
-              background: form.marketing_agree ? C.goldBg : "#fff",
-              border: `1.5px solid ${form.marketing_agree ? C.gold : C.border}`,
-              borderRadius: 12, padding: 16, cursor: "pointer",
-              transition: "all 0.2s",
-            }}
-          >
+          <div onClick={() => set("marketing_agree", !form.marketing_agree)} style={{
+            background: form.marketing_agree ? C.goldBg : "#fff",
+            border: `1.5px solid ${form.marketing_agree ? C.gold : C.border}`,
+            borderRadius: 12, padding: 16, cursor: "pointer", transition: "all 0.2s",
+          }}>
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
               <div style={{
                 width: 24, height: 24, borderRadius: 6,
@@ -358,22 +383,17 @@ if (existingSurvey) {
                 {form.marketing_agree && <span style={{ color: "#fff", fontSize: 14, fontWeight: 900 }}>✓</span>}
               </div>
               <div>
-                <p style={{ fontSize: 13, fontWeight: 800, color: form.marketing_agree ? C.gold : C.text }}>
-                  마케팅 정보 수신 동의 (선택)
-                </p>
-                <p style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>
-                  두피 케어 리포트 및 맞춤 케어 정보를 카카오톡으로 받아보세요
-                </p>
+                <p style={{ fontSize: 13, fontWeight: 800, color: form.marketing_agree ? C.gold : C.text }}>마케팅 정보 수신 동의 (선택)</p>
+                <p style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>두피 케어 리포트 및 맞춤 케어 정보를 카카오톡으로 받아보세요</p>
               </div>
             </div>
           </div>
         </div>
       ),
-      canNext: true, // 마케팅 동의는 선택이라 항상 다음 가능
+      canNext: true,
     },
   ];
 
-  // ─── 완료 화면 ────────────────────────────────────────────────────
   if (done) {
     return (
       <div style={{ minHeight: "100vh", background: C.bg, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
@@ -404,8 +424,6 @@ if (existingSurvey) {
   return (
     <div style={{ minHeight: "100vh", background: C.bg, fontFamily: "'Noto Sans KR', sans-serif", color: C.text }}>
       <style>{`@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700;900&display=swap');* { box-sizing: border-box; margin: 0; padding: 0; }`}</style>
-
-      {/* 헤더 */}
       <div style={{ background: "#fff", borderBottom: `1px solid ${C.border}`, padding: "16px 24px" }}>
         <div style={{ maxWidth: 480, margin: "0 auto", display: "flex", alignItems: "center", gap: 10 }}>
           <div style={{ width: 28, height: 28, borderRadius: 8, background: C.gold, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13 }}>✦</div>
@@ -416,13 +434,9 @@ if (existingSurvey) {
           <span style={{ marginLeft: "auto", fontSize: 12, color: C.muted }}>{step + 1} / {steps.length}</span>
         </div>
       </div>
-
-      {/* 진행바 */}
       <div style={{ height: 3, background: C.border }}>
         <div style={{ height: "100%", width: `${progress}%`, background: C.gold, transition: "width 0.3s" }} />
       </div>
-
-      {/* 본문 */}
       <div style={{ maxWidth: 480, margin: "0 auto", padding: "32px 24px 100px" }}>
         <div style={{ marginBottom: 28 }}>
           <span style={{ fontSize: 36 }}>{current.emoji}</span>
@@ -431,15 +445,12 @@ if (existingSurvey) {
         </div>
         {current.content}
       </div>
-
-      {/* 하단 버튼 */}
       <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: "#fff", borderTop: `1px solid ${C.border}`, padding: "16px 24px" }}>
         <div style={{ maxWidth: 480, margin: "0 auto", display: "flex", gap: 10 }}>
           {step > 0 && (
             <button onClick={() => setStep(s => s - 1)} style={{
               flex: 1, padding: 14, borderRadius: 12, border: `1px solid ${C.border}`,
-              background: "#fff", fontSize: 15, fontFamily: "inherit",
-              cursor: "pointer", color: C.sub,
+              background: "#fff", fontSize: 15, fontFamily: "inherit", cursor: "pointer", color: C.sub,
             }}>← 이전</button>
           )}
           {step < steps.length - 1 ? (

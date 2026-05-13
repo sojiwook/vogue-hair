@@ -192,6 +192,15 @@ function AddCustomer({ onSave, onCancel }) {
   );
 }
 
+function parseScalpReport(raw) {
+  if (!raw) return null;
+  try {
+    return typeof raw === 'object' ? raw : JSON.parse(raw);
+  } catch {
+    return { aiAnalysis: String(raw) };
+  }
+}
+
 function ScalpTab({ customer, onUpdate }) {
   const fileRef = useRef();
   const LABELS = ["정수리", "측두부(좌)", "측두부(우)", "후두부", "전체"];
@@ -239,14 +248,43 @@ function ScalpTab({ customer, onUpdate }) {
   });
 
   const saveReport = async () => {
-    const allReports = images
-      .filter(im => im.done && im.report)
+    const completedImages = images.filter(im => im.done && im.report);
+    if (completedImages.length === 0) return;
+
+    const allReportsText = completedImages
       .map(im => "[" + im.label + "]\n" + im.report)
       .join("\n\n---\n\n");
 
+    const extractNum = (text, re) => {
+      const m = text.match(re);
+      return m ? Math.min(100, Math.max(0, parseInt(m[1]))) : null;
+    };
+    const avg = arr => arr.length > 0 ? Math.round(arr.reduce((a, b) => a + b, 0) / arr.length) : 50;
+
+    const moistures = completedImages.map(im => extractNum(im.report, /두피\s*수분도[^\d]*(\d+)/)).filter(v => v !== null);
+    const elasticities = completedImages.map(im => extractNum(im.report, /모낭\s*건강도[^\d]*(\d+)/)).filter(v => v !== null);
+
+    const firstReport = completedImages[0].report;
+    const SCALP_TYPES = ["건성", "지성", "복합성", "민감성", "정상", "예민"];
+    const foundType = SCALP_TYPES.find(t => firstReport.includes(t));
+    const scalpType = foundType ? foundType + " 두피" : "분석 참조";
+
+    const concernsSection = firstReport.match(/주의\s*소견[^\n]*\n([\s\S]*?)(?:\n\*\*|$)/);
+    const concerns = concernsSection
+      ? concernsSection[1].split('\n').map(l => l.replace(/^[\s\-·•]+/, '').trim()).filter(l => l.length > 0)
+      : [];
+
+    const reportJson = JSON.stringify({
+      moisture: avg(moistures),
+      elasticity: avg(elasticities),
+      scalpType,
+      concerns,
+      aiAnalysis: allReportsText,
+      analyzedAt: new Date().toISOString(),
+    });
+
     const today = new Date().toISOString().slice(0, 10);
 
-    // DB에서 직접 오늘 방문 기록 조회
     const { data: todayVisit } = await supabase
       .from("visits")
       .select("*")
@@ -256,9 +294,9 @@ function ScalpTab({ customer, onUpdate }) {
 
     if (todayVisit) {
       await supabase.from("visits").update({
-        scalp_report: allReports,
+        scalp_report: reportJson,
       }).eq("id", todayVisit.id);
-      if (onUpdate) onUpdate({ ...customer, visits: [...(customer.visits || []).filter(v => v.id !== todayVisit.id), { ...todayVisit, scalp_report: allReports }] });
+      if (onUpdate) onUpdate({ ...customer, visits: [...(customer.visits || []).filter(v => v.id !== todayVisit.id), { ...todayVisit, scalp_report: reportJson }] });
       alert("✅ 두피 분석 결과가 저장됐어요!");
     } else {
       const { data: newVisit } = await supabase.from("visits").insert({
@@ -270,7 +308,7 @@ function ScalpTab({ customer, onUpdate }) {
         moisture: 55,
         elasticity: 50,
         score: 51,
-        scalp_report: allReports,
+        scalp_report: reportJson,
       }).select().single();
       if (onUpdate) onUpdate({ ...customer, visits: [...(customer.visits || []), newVisit] });
       alert("✅ 방문 기록 + 두피 분석 저장 완료!");
@@ -580,12 +618,21 @@ function HistoryTab({ customer, onAddVisit }) {
                       📝 {v.note}
                     </p>
                   )}
-                  {v.scalp_report && (
-                    <div style={{ background: C.bg, borderRadius: 8, padding: "10px 14px", marginBottom: 12 }}>
-                      <p style={{ fontSize: 11, fontWeight: 800, color: C.gold, marginBottom: 6 }}>🔬 두피 분석 결과</p>
-                      <p style={{ fontSize: 12, color: C.sub, lineHeight: 1.8, whiteSpace: "pre-wrap" }}>{v.scalp_report}</p>
-                    </div>
-                  )}
+                  {v.scalp_report && (() => {
+                    const r = parseScalpReport(v.scalp_report);
+                    return (
+                      <div style={{ background: C.bg, borderRadius: 8, padding: "10px 14px", marginBottom: 12 }}>
+                        <p style={{ fontSize: 11, fontWeight: 800, color: C.gold, marginBottom: 6 }}>🔬 두피 분석 결과</p>
+                        {r?.scalpType && r.scalpType !== "분석 참조" && (
+                          <p style={{ fontSize: 12, color: C.sub, marginBottom: 6 }}>두피 타입: <strong>{r.scalpType}</strong></p>
+                        )}
+                        {r?.concerns?.length > 0 && (
+                          <p style={{ fontSize: 12, color: C.sub, marginBottom: 6 }}>주요 소견: {r.concerns.join(" · ")}</p>
+                        )}
+                        <p style={{ fontSize: 12, color: C.sub, lineHeight: 1.8, whiteSpace: "pre-wrap" }}>{r?.aiAnalysis || String(v.scalp_report)}</p>
+                      </div>
+                    );
+                  })()}
                   <button
                     onClick={() => openReport(customer.phone)}
                     style={{
@@ -770,12 +817,19 @@ function KakaoTab({ customer }) {
                 </div>
               ))}
             </div>
-            {selectedVisit.scalp_report && (
-              <div style={{ background: C.bg, borderRadius: 12, padding: 16 }}>
-                <p style={{ fontSize: 12, fontWeight: 800, marginBottom: 8, color: C.gold }}>🔬 AI 두피 분석</p>
-                <p style={{ fontSize: 11, color: C.sub, lineHeight: 1.8, whiteSpace: "pre-wrap" }}>{selectedVisit.scalp_report.slice(0, 200)}...</p>
-              </div>
-            )}
+            {selectedVisit.scalp_report && (() => {
+              const r = parseScalpReport(selectedVisit.scalp_report);
+              const preview = (r?.aiAnalysis || String(selectedVisit.scalp_report)).slice(0, 200);
+              return (
+                <div style={{ background: C.bg, borderRadius: 12, padding: 16 }}>
+                  <p style={{ fontSize: 12, fontWeight: 800, marginBottom: 8, color: C.gold }}>🔬 AI 두피 분석</p>
+                  {r?.scalpType && r.scalpType !== "분석 참조" && (
+                    <p style={{ fontSize: 11, color: C.gold, fontWeight: 700, marginBottom: 4 }}>두피 타입: {r.scalpType}</p>
+                  )}
+                  <p style={{ fontSize: 11, color: C.sub, lineHeight: 1.8, whiteSpace: "pre-wrap" }}>{preview}...</p>
+                </div>
+              );
+            })()}
             {selectedVisit.note && (
               <div style={{ background: C.bg, borderRadius: 12, padding: 16 }}>
                 <p style={{ fontSize: 12, fontWeight: 800, marginBottom: 8 }}>📝 스타일리스트 메모</p>
