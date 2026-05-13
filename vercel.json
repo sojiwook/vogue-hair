@@ -1,4 +1,8 @@
 {
+  "functions": {
+    "api/analyze.js": { "maxDuration": 30 },
+    "api/sendAlimtalk.js": { "maxDuration": 10 }
+  },
   "rewrites": [
     { "source": "/((?!api/).*)", "destination": "/index.html" }
   ]
