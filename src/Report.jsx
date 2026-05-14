@@ -93,6 +93,14 @@ export default function Report() {
   const { customer, visit } = data;
   const scoreColor = visit.score >= 70 ? C.green : visit.score >= 50 ? "#b07800" : C.red;
 
+  const parseScalpReport = raw => {
+    if (!raw) return null;
+    try { return typeof raw === 'object' ? raw : JSON.parse(raw); }
+    catch { return { aiAnalysis: String(raw) }; }
+  };
+  const scalpParsed = parseScalpReport(visit.scalp_report);
+  const scalpText = scalpParsed?.aiAnalysis ?? String(visit.scalp_report ?? "");
+
   return (
     <div style={{ minHeight: "100vh", background: C.bg, fontFamily: "'Noto Sans KR', sans-serif", color: C.text }}>
       <style>{`@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700;900&display=swap');* { box-sizing: border-box; margin: 0; padding: 0; }`}</style>
@@ -130,11 +138,14 @@ export default function Report() {
         </div>
 
         {/* AI 두피 분석 */}
-        {visit.scalp_report && (
+        {scalpText && (
           <div style={{ background: C.card, borderRadius: 16, padding: 24, marginBottom: 16, border: `1px solid ${C.border}` }}>
             <h3 style={{ fontSize: 15, fontWeight: 800, marginBottom: 16 }}>🔬 AI 두피 분석 결과</h3>
+            {scalpParsed?.scalpType && scalpParsed.scalpType !== "분석 참조" && (
+              <p style={{ fontSize: 13, color: C.gold, fontWeight: 700, marginBottom: 12 }}>두피 타입: {scalpParsed.scalpType}</p>
+            )}
             <div style={{ fontSize: 13, color: C.sub, lineHeight: 1.9, whiteSpace: "pre-wrap" }}>
-              {visit.scalp_report.split("**").map((part, i) =>
+              {scalpText.split("**").map((part, i) =>
                 i % 2 === 1
                   ? <strong key={i} style={{ color: C.gold }}>{part}</strong>
                   : <span key={i}>{part}</span>
