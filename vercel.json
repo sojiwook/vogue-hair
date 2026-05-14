@@ -3,7 +3,8 @@
     "api/analyze.js": { "maxDuration": 30 },
     "api/sendAlimtalk.js": { "maxDuration": 10 }
   },
-  "rewrites": [
-    { "source": "/(.*)", "destination": "/index.html" }
+  "routes": [
+    { "src": "/api/(.*)", "dest": "/api/$1" },
+    { "src": "/(.*)", "dest": "/index.html" }
   ]
 }
