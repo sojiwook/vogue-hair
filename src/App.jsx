@@ -728,7 +728,7 @@ function HistoryTab({ customer, onAddVisit }) {
                         )}
                         <div>
                           <p style={{ fontSize: 11, color: C.muted, marginBottom: 4 }}>상세 분석</p>
-                          <p style={{ fontSize: 12, color: C.sub, lineHeight: 1.8, whiteSpace: "pre-wrap" }}>{r?.aiAnalysis || String(v.scalp_report)}</p>
+                          <div style={{ fontSize: 12 }}>{renderMd(r?.aiAnalysis || String(v.scalp_report))}</div>
                         </div>
                       </div>
                     );
@@ -919,14 +919,15 @@ function KakaoTab({ customer }) {
             </div>
             {selectedVisit.scalp_report && (() => {
               const r = parseScalpReport(selectedVisit.scalp_report);
-              const preview = (r?.aiAnalysis || String(selectedVisit.scalp_report)).slice(0, 200);
+              const analysisText = r?.aiAnalysis || (typeof r === 'object' ? JSON.stringify(r) : String(selectedVisit.scalp_report));
+              const preview = analysisText.slice(0, 200);
               return (
                 <div style={{ background: C.bg, borderRadius: 12, padding: 16 }}>
                   <p style={{ fontSize: 12, fontWeight: 800, marginBottom: 8, color: C.gold }}>🔬 AI 두피 분석</p>
                   {r?.scalpType && r.scalpType !== "분석 참조" && (
                     <p style={{ fontSize: 11, color: C.gold, fontWeight: 700, marginBottom: 4 }}>두피 타입: {r.scalpType}</p>
                   )}
-                  <p style={{ fontSize: 11, color: C.sub, lineHeight: 1.8, whiteSpace: "pre-wrap" }}>{preview}...</p>
+                  <div style={{ fontSize: 11 }}>{renderMd(preview + (analysisText.length > 200 ? "..." : ""))}</div>
                 </div>
               );
             })()}
