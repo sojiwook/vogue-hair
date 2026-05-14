@@ -214,6 +214,78 @@ function parseScalpReport(raw) {
   }
 }
 
+function renderMd(t) {
+  if (!t) return null;
+  return String(t).split("\n").map((line, i) => {
+    const html = line.replace(/\*\*(.*?)\*\*/g, `<strong style="color:${C.gold}">$1</strong>`);
+    return <p key={i} style={{ fontSize: 13, lineHeight: 1.8, color: C.sub, margin: "2px 0" }} dangerouslySetInnerHTML={{ __html: html }} />;
+  });
+}
+
+function ScalpReportView({ report, analyzing }) {
+  if (!report && !analyzing) {
+    return (
+      <div style={{ textAlign: "center", padding: "60px 0", color: C.muted }}>
+        <div style={{ fontSize: 36, marginBottom: 8, opacity: 0.3 }}>🤖</div>
+        <p style={{ fontSize: 13 }}>분석 버튼을 눌러주세요</p>
+      </div>
+    );
+  }
+  const parsed = report ? parseScalpReport(report) : null;
+  const isJson = parsed && (parsed.scalpType !== undefined || parsed.moisture !== undefined || parsed.aiAnalysis !== undefined);
+  return (
+    <div style={{ maxHeight: 280, overflowY: "auto" }}>
+      {isJson ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          {parsed.scalpType && (
+            <div>
+              <p style={{ fontSize: 11, color: C.muted, marginBottom: 2 }}>두피 타입</p>
+              <p style={{ fontSize: 14, fontWeight: 800, color: C.gold }}>{parsed.scalpType}</p>
+            </div>
+          )}
+          {parsed.moisture !== undefined && (
+            <div>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                <span style={{ fontSize: 12, color: C.sub }}>수분도</span>
+                <span style={{ fontSize: 12, fontWeight: 800, color: C.blue }}>{parsed.moisture}</span>
+              </div>
+              <Bar value={parsed.moisture} color={C.blue} />
+            </div>
+          )}
+          {parsed.elasticity !== undefined && (
+            <div>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                <span style={{ fontSize: 12, color: C.sub }}>탄력도</span>
+                <span style={{ fontSize: 12, fontWeight: 800, color: C.green }}>{parsed.elasticity}</span>
+              </div>
+              <Bar value={parsed.elasticity} color={C.green} />
+            </div>
+          )}
+          {parsed.concerns?.length > 0 && (
+            <div>
+              <p style={{ fontSize: 11, color: C.muted, marginBottom: 4 }}>주의 소견</p>
+              <ul style={{ paddingLeft: 16, margin: 0 }}>
+                {parsed.concerns.map((c, i) => (
+                  <li key={i} style={{ fontSize: 12, color: C.sub, lineHeight: 1.8 }}>{c}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {parsed.aiAnalysis && (
+            <div>
+              <p style={{ fontSize: 11, color: C.muted, marginBottom: 4 }}>상세 분석</p>
+              {renderMd(parsed.aiAnalysis)}
+            </div>
+          )}
+        </div>
+      ) : (
+        renderMd(report || "")
+      )}
+      {analyzing && <span style={{ color: C.gold }}>▋</span>}
+    </div>
+  );
+}
+
 function ScalpTab({ customer, onUpdate }) {
   const fileRef = useRef();
   const LABELS = ["정수리", "측두부(좌)", "측두부(우)", "후두부", "전체"];
@@ -255,10 +327,6 @@ function ScalpTab({ customer, onUpdate }) {
     }
   };
 
-  const renderMd = t => t.split("\n").map((line, i) => {
-    const html = line.replace(/\*\*(.*?)\*\*/g, `<strong style="color:${C.gold}">$1</strong>`);
-    return <p key={i} style={{ fontSize: 13, lineHeight: 1.8, color: C.sub, margin: "2px 0" }} dangerouslySetInnerHTML={{ __html: html }} />;
-  });
 
   const saveReport = async () => {
     const completedImages = images.filter(im => im.done && im.report);
@@ -408,17 +476,7 @@ function ScalpTab({ customer, onUpdate }) {
 
           <Card>
             <h3 style={{ fontSize: 14, fontWeight: 800, marginBottom: 16 }}>📋 AI 진단 리포트</h3>
-            {!images[activeIdx]?.report && !images[activeIdx]?.analyzing ? (
-              <div style={{ textAlign: "center", padding: "60px 0", color: C.muted }}>
-                <div style={{ fontSize: 36, marginBottom: 8, opacity: 0.3 }}>🤖</div>
-                <p style={{ fontSize: 13 }}>분석 버튼을 눌러주세요</p>
-              </div>
-            ) : (
-              <div style={{ maxHeight: 280, overflowY: "auto" }}>
-                {renderMd(images[activeIdx]?.report || "")}
-                {images[activeIdx]?.analyzing && <span style={{ color: C.gold }}>▋</span>}
-              </div>
-            )}
+            <ScalpReportView report={images[activeIdx]?.report} analyzing={images[activeIdx]?.analyzing} />
             {images.some(im => im.done) && (
               <button
                 onClick={saveReport}
@@ -636,14 +694,42 @@ function HistoryTab({ customer, onAddVisit }) {
                     const r = parseScalpReport(v.scalp_report);
                     return (
                       <div style={{ background: C.bg, borderRadius: 8, padding: "10px 14px", marginBottom: 12 }}>
-                        <p style={{ fontSize: 11, fontWeight: 800, color: C.gold, marginBottom: 6 }}>🔬 두피 분석 결과</p>
+                        <p style={{ fontSize: 11, fontWeight: 800, color: C.gold, marginBottom: 8 }}>🔬 두피 분석 결과</p>
                         {r?.scalpType && r.scalpType !== "분석 참조" && (
-                          <p style={{ fontSize: 12, color: C.sub, marginBottom: 6 }}>두피 타입: <strong>{r.scalpType}</strong></p>
+                          <p style={{ fontSize: 12, color: C.sub, marginBottom: 8 }}>두피 타입: <strong>{r.scalpType}</strong></p>
+                        )}
+                        {r?.moisture !== undefined && (
+                          <div style={{ marginBottom: 8 }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}>
+                              <span style={{ fontSize: 11, color: C.muted }}>수분도</span>
+                              <span style={{ fontSize: 11, fontWeight: 800, color: C.blue }}>{r.moisture}</span>
+                            </div>
+                            <Bar value={r.moisture} color={C.blue} />
+                          </div>
+                        )}
+                        {r?.elasticity !== undefined && (
+                          <div style={{ marginBottom: 8 }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}>
+                              <span style={{ fontSize: 11, color: C.muted }}>탄력도</span>
+                              <span style={{ fontSize: 11, fontWeight: 800, color: C.green }}>{r.elasticity}</span>
+                            </div>
+                            <Bar value={r.elasticity} color={C.green} />
+                          </div>
                         )}
                         {r?.concerns?.length > 0 && (
-                          <p style={{ fontSize: 12, color: C.sub, marginBottom: 6 }}>주요 소견: {r.concerns.join(" · ")}</p>
+                          <div style={{ marginBottom: 8 }}>
+                            <p style={{ fontSize: 11, color: C.muted, marginBottom: 4 }}>주의 소견</p>
+                            <ul style={{ paddingLeft: 14, margin: 0 }}>
+                              {r.concerns.map((c, i) => (
+                                <li key={i} style={{ fontSize: 12, color: C.sub, lineHeight: 1.8 }}>{c}</li>
+                              ))}
+                            </ul>
+                          </div>
                         )}
-                        <p style={{ fontSize: 12, color: C.sub, lineHeight: 1.8, whiteSpace: "pre-wrap" }}>{r?.aiAnalysis || String(v.scalp_report)}</p>
+                        <div>
+                          <p style={{ fontSize: 11, color: C.muted, marginBottom: 4 }}>상세 분석</p>
+                          <p style={{ fontSize: 12, color: C.sub, lineHeight: 1.8, whiteSpace: "pre-wrap" }}>{r?.aiAnalysis || String(v.scalp_report)}</p>
+                        </div>
                       </div>
                     );
                   })()}
