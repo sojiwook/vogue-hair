@@ -95,6 +95,31 @@ function CompareSection({ current, prev }) {
   );
 }
 
+function renderMd(text) {
+  if (!text) return null;
+  return String(text).split('\n').map((line, li) => {
+    const headerMatch = line.match(/^#{1,6}\s+(.*)/);
+    if (headerMatch) {
+      return (
+        <span key={li} style={{ display: 'block', fontWeight: 800, color: C.gold, marginTop: li > 0 ? 8 : 0, marginBottom: 2 }}>
+          {headerMatch[1]}{'\n'}
+        </span>
+      );
+    }
+    const parts = line.split('**');
+    return (
+      <span key={li}>
+        {parts.map((part, i) =>
+          i % 2 === 1
+            ? <strong key={i} style={{ color: C.gold }}>{part}</strong>
+            : <span key={i}>{part}</span>
+        )}
+        {'\n'}
+      </span>
+    );
+  });
+}
+
 function PhotoGrid({ images, borderColor, compact }) {
   const labelMap = { top: '정수리', left: '측두부(좌)', right: '측두부(우)', back: '후두부', full: '전체' };
   const getLabel = (url, i) => {
@@ -199,6 +224,7 @@ export default function Report() {
         .select("*")
         .eq("customer_id", customer.id)
         .order("date", { ascending: false })
+        .order("id", { ascending: false })
         .limit(2);
 
       if (!visits || visits.length === 0) { setError("방문 기록이 없습니다."); setLoading(false); return; }
@@ -330,11 +356,7 @@ export default function Report() {
               <p style={{ fontSize: 13, color: C.gold, fontWeight: 700, marginBottom: 12 }}>두피 타입: {scalpParsed.scalpType}</p>
             )}
             <div style={{ fontSize: 13, color: C.sub, lineHeight: 1.9, whiteSpace: "pre-wrap" }}>
-              {String(scalpText).split("**").map((part, i) =>
-                i % 2 === 1
-                  ? <strong key={i} style={{ color: C.gold }}>{part}</strong>
-                  : <span key={i}>{part}</span>
-              )}
+              {renderMd(scalpText)}
             </div>
           </div>
         )}
