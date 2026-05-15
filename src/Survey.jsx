@@ -27,9 +27,9 @@ function calcAge(birthDate) {
 
 const selectStyle = {
   flex: 1, padding: "12px 8px", border: `1.5px solid ${C.border}`,
-  borderRadius: 10, fontSize: 15, fontFamily: "inherit",
-  outline: "none", background: "#fff", color: "#1a1a1a", appearance: "none",
-  WebkitAppearance: "none", textAlign: "center",
+  borderRadius: 10, fontSize: 16, fontFamily: "inherit",
+  outline: "none", background: "#fff", color: "#1a1a1a",
+  textAlign: "center",
 };
 
 function BirthDatePicker({ value, onChange }) {

@@ -99,26 +99,25 @@ function renderMd(text) {
   if (!text) return null;
   return String(text).split('\n').map((line, li) => {
     const trimmed = line.trim();
-    if (trimmed === '') return null;
-    const headerMatch = trimmed.match(/^#{1,6}\s*(.*)/);
+    if (!trimmed) return null;
+    const headerMatch = trimmed.match(/^#{1,3}\s+(.*)/);
     if (headerMatch) {
       const headerText = headerMatch[1].trim();
       if (!headerText) return null;
       return (
-        <span key={li} style={{ display: 'block', fontWeight: 800, color: C.gold, marginTop: li > 0 ? 8 : 0, marginBottom: 2 }}>
-          {headerText}{'\n'}
+        <span key={li} style={{ display: 'block', fontWeight: 800, color: C.gold, marginTop: li > 0 ? 10 : 0, marginBottom: 4 }}>
+          {headerText}
         </span>
       );
     }
     const parts = trimmed.split('**');
     return (
-      <span key={li}>
+      <span key={li} style={{ display: 'block', marginBottom: 2 }}>
         {parts.map((part, i) =>
           i % 2 === 1
             ? <strong key={i} style={{ color: C.gold }}>{part}</strong>
             : <span key={i}>{part}</span>
         )}
-        {'\n'}
       </span>
     );
   });
