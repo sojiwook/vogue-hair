@@ -25,6 +25,63 @@ function calcAge(birthDate) {
   return age;
 }
 
+const selectStyle = {
+  flex: 1, padding: "12px 8px", border: `1.5px solid ${C.border}`,
+  borderRadius: 10, fontSize: 15, fontFamily: "inherit",
+  outline: "none", background: "#fff", color: "#1a1a1a", appearance: "none",
+  WebkitAppearance: "none", textAlign: "center",
+};
+
+function BirthDatePicker({ value, onChange }) {
+  const parts = value ? value.split("-") : ["", "", ""];
+  const selYear  = parts[0] || "";
+  const selMonth = parts[1] ? String(Number(parts[1])) : "";
+  const selDay   = parts[2] ? String(Number(parts[2])) : "";
+
+  const daysInMonth = (selYear && selMonth)
+    ? new Date(Number(selYear), Number(selMonth), 0).getDate()
+    : 31;
+
+  const emit = (y, m, d) => {
+    if (y && m && d) {
+      onChange(`${y}-${String(m).padStart(2,"0")}-${String(d).padStart(2,"0")}`);
+    } else {
+      onChange("");
+    }
+  };
+
+  const years  = Array.from({ length: 71 }, (_, i) => 2010 - i);
+  const months = Array.from({ length: 12 }, (_, i) => i + 1);
+  const days   = Array.from({ length: daysInMonth }, (_, i) => i + 1);
+
+  const handleYear  = e => emit(e.target.value, selMonth, selDay);
+  const handleMonth = e => {
+    const newMonth = e.target.value;
+    const maxDay = newMonth && selYear
+      ? new Date(Number(selYear), Number(newMonth), 0).getDate() : 31;
+    const clampedDay = selDay && Number(selDay) > maxDay ? "" : selDay;
+    emit(selYear, newMonth, clampedDay);
+  };
+  const handleDay = e => emit(selYear, selMonth, e.target.value);
+
+  return (
+    <div style={{ display: "flex", gap: 6 }}>
+      <select value={selYear} onChange={handleYear} style={selectStyle}>
+        <option value="">연도</option>
+        {years.map(y => <option key={y} value={y}>{y}년</option>)}
+      </select>
+      <select value={selMonth} onChange={handleMonth} style={selectStyle}>
+        <option value="">월</option>
+        {months.map(m => <option key={m} value={m}>{m}월</option>)}
+      </select>
+      <select value={selDay} onChange={handleDay} style={selectStyle}>
+        <option value="">일</option>
+        {days.map(d => <option key={d} value={d}>{d}일</option>)}
+      </select>
+    </div>
+  );
+}
+
 function OptionBtn({ label, selected, onClick }) {
   return (
     <button onClick={onClick} style={{
@@ -229,8 +286,7 @@ export default function Survey() {
               생년월일
               {form.birth_date && <span style={{ marginLeft: 8, color: C.gold, fontWeight: 800 }}>({calcAge(form.birth_date)}세)</span>}
             </label>
-            <input type="date" value={form.birth_date} onChange={e => set("birth_date", e.target.value)}
-              style={{ width: "100%", padding: "12px 16px", border: `1.5px solid ${C.border}`, borderRadius: 10, fontSize: 15, fontFamily: "inherit", outline: "none", boxSizing: "border-box" }} />
+            <BirthDatePicker value={form.birth_date} onChange={v => set("birth_date", v)} />
           </div>
           <div>
             <label style={{ fontSize: 13, color: C.sub, display: "block", marginBottom: 10, fontWeight: 600 }}>성별</label>
