@@ -266,6 +266,12 @@ export default function Report() {
   const currentImages = Array.isArray(visit.scalp_images) ? visit.scalp_images : [];
   const prevImages = Array.isArray(prevVisit?.scalp_images) ? prevVisit.scalp_images : [];
 
+  console.log('[Report] visit:', visit?.id, visit?.date);
+  console.log('[Report] scalp_report:', visit?.scalp_report);
+  console.log('[Report] scalp_images:', visit?.scalp_images);
+  console.log('[Report] scalpText:', scalpText);
+  console.log('[Report] currentImages:', currentImages);
+
   return (
     <div style={{ minHeight: "100vh", background: C.bg, fontFamily: "'Noto Sans KR', sans-serif", color: C.text }}>
       <style>{`@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700;900&display=swap');* { box-sizing: border-box; margin: 0; padding: 0; }`}</style>
