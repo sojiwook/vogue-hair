@@ -98,6 +98,7 @@ function CompareSection({ current, prev }) {
 function renderMd(text) {
   if (!text) return null;
   return String(text).split('\n').map((line, li) => {
+    if (line.trim() === '') return null;
     const headerMatch = line.match(/^#{1,6}\s+(.*)/);
     if (headerMatch) {
       return (
