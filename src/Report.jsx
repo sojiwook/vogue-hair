@@ -98,16 +98,19 @@ function CompareSection({ current, prev }) {
 function renderMd(text) {
   if (!text) return null;
   return String(text).split('\n').map((line, li) => {
-    if (line.trim() === '') return null;
-    const headerMatch = line.match(/^#{1,6}\s+(.*)/);
+    const trimmed = line.trim();
+    if (trimmed === '') return null;
+    const headerMatch = trimmed.match(/^#{1,6}\s*(.*)/);
     if (headerMatch) {
+      const headerText = headerMatch[1].trim();
+      if (!headerText) return null;
       return (
         <span key={li} style={{ display: 'block', fontWeight: 800, color: C.gold, marginTop: li > 0 ? 8 : 0, marginBottom: 2 }}>
-          {headerMatch[1]}{'\n'}
+          {headerText}{'\n'}
         </span>
       );
     }
-    const parts = line.split('**');
+    const parts = trimmed.split('**');
     return (
       <span key={li}>
         {parts.map((part, i) =>

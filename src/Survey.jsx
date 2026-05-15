@@ -33,10 +33,10 @@ const selectStyle = {
 };
 
 function BirthDatePicker({ value, onChange }) {
-  const parts = value ? value.split("-") : ["", "", ""];
-  const selYear  = parts[0] || "";
-  const selMonth = parts[1] ? String(Number(parts[1])) : "";
-  const selDay   = parts[2] ? String(Number(parts[2])) : "";
+  const initParts = value ? value.split("-") : ["", "", ""];
+  const [selYear,  setSelYear]  = useState(initParts[0] || "");
+  const [selMonth, setSelMonth] = useState(initParts[1] ? String(Number(initParts[1])) : "");
+  const [selDay,   setSelDay]   = useState(initParts[2] ? String(Number(initParts[2])) : "");
 
   const daysInMonth = (selYear && selMonth)
     ? new Date(Number(selYear), Number(selMonth), 0).getDate()
@@ -54,15 +54,24 @@ function BirthDatePicker({ value, onChange }) {
   const months = Array.from({ length: 12 }, (_, i) => i + 1);
   const days   = Array.from({ length: daysInMonth }, (_, i) => i + 1);
 
-  const handleYear  = e => emit(e.target.value, selMonth, selDay);
-  const handleMonth = e => {
-    const newMonth = e.target.value;
-    const maxDay = newMonth && selYear
-      ? new Date(Number(selYear), Number(newMonth), 0).getDate() : 31;
-    const clampedDay = selDay && Number(selDay) > maxDay ? "" : selDay;
-    emit(selYear, newMonth, clampedDay);
+  const handleYear = e => {
+    const y = e.target.value;
+    setSelYear(y);
+    emit(y, selMonth, selDay);
   };
-  const handleDay = e => emit(selYear, selMonth, e.target.value);
+  const handleMonth = e => {
+    const m = e.target.value;
+    const maxDay = m && selYear ? new Date(Number(selYear), Number(m), 0).getDate() : 31;
+    const clampedDay = selDay && Number(selDay) > maxDay ? "" : selDay;
+    setSelMonth(m);
+    setSelDay(clampedDay);
+    emit(selYear, m, clampedDay);
+  };
+  const handleDay = e => {
+    const d = e.target.value;
+    setSelDay(d);
+    emit(selYear, selMonth, d);
+  };
 
   return (
     <div style={{ display: "flex", gap: 6 }}>
