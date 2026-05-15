@@ -286,15 +286,42 @@ function ScalpReportView({ report, analyzing }) {
   );
 }
 
+async function convertToJpeg(file) {
+  return new Promise((resolve) => {
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const MAX = 1920;
+      let w = img.width, h = img.height;
+      if (w > MAX || h > MAX) {
+        if (w > h) { h = Math.round(h * MAX / w); w = MAX; }
+        else { w = Math.round(w * MAX / h); h = MAX; }
+      }
+      canvas.width = w;
+      canvas.height = h;
+      ctx.drawImage(img, 0, 0, w, h);
+      URL.revokeObjectURL(url);
+      canvas.toBlob(blob => {
+        resolve(new File([blob], file.name.replace(/\.[^.]+$/, '.jpg'), { type: 'image/jpeg' }));
+      }, 'image/jpeg', 0.85);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); resolve(file); };
+    img.src = url;
+  });
+}
+
 function ScalpTab({ customer, onUpdate }) {
   const fileRef = useRef();
   const LABELS = ["정수리", "측두부(좌)", "측두부(우)", "후두부", "전체"];
   const [images, setImages] = useState([]);
   const [activeIdx, setActiveIdx] = useState(0);
 
-  const handleFiles = e => {
+  const handleFiles = async e => {
     const files = Array.from(e.target.files).slice(0, 5 - images.length);
-    Promise.all(files.map((file, i) => new Promise(resolve => {
+    const converted = await Promise.all(files.map(f => convertToJpeg(f)));
+    const newImgs = await Promise.all(converted.map((file, i) => new Promise(resolve => {
       const reader = new FileReader();
       reader.onload = ev => resolve({
         src: ev.target.result,
@@ -302,7 +329,8 @@ function ScalpTab({ customer, onUpdate }) {
         report: "", analyzing: false, done: false
       });
       reader.readAsDataURL(file);
-    }))).then(newImgs => setImages(prev => [...prev, ...newImgs].slice(0, 5)));
+    })));
+    setImages(prev => [...prev, ...newImgs].slice(0, 5));
   };
 
   const analyze = async idx => {
