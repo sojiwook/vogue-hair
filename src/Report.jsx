@@ -98,6 +98,7 @@ function CompareSection({ current, prev }) {
 function PhotoGrid({ images, borderColor, compact }) {
   const labelMap = { top: '정수리', left: '측두부(좌)', right: '측두부(우)', back: '후두부', full: '전체' };
   const getLabel = (url, i) => {
+    if (!url) return `사진 ${i + 1}`;
     const filename = url.split('/').pop()?.split('_')[0] || '';
     return labelMap[filename] || `사진 ${i + 1}`;
   };
@@ -229,7 +230,12 @@ export default function Report() {
     catch { return { aiAnalysis: String(raw) }; }
   };
   const scalpParsed = parseScalpReport(visit.scalp_report);
-  const scalpText = scalpParsed?.aiAnalysis ?? String(visit.scalp_report ?? "");
+  const aiRaw = scalpParsed?.aiAnalysis;
+  const scalpText = (aiRaw && typeof aiRaw === 'string' && aiRaw.trim())
+    ? aiRaw
+    : (typeof visit.scalp_report === 'string' && visit.scalp_report.trim())
+      ? visit.scalp_report
+      : null;
 
   const currentImages = Array.isArray(visit.scalp_images) ? visit.scalp_images : [];
   const prevImages = Array.isArray(prevVisit?.scalp_images) ? prevVisit.scalp_images : [];
@@ -324,7 +330,7 @@ export default function Report() {
               <p style={{ fontSize: 13, color: C.gold, fontWeight: 700, marginBottom: 12 }}>두피 타입: {scalpParsed.scalpType}</p>
             )}
             <div style={{ fontSize: 13, color: C.sub, lineHeight: 1.9, whiteSpace: "pre-wrap" }}>
-              {scalpText.split("**").map((part, i) =>
+              {String(scalpText).split("**").map((part, i) =>
                 i % 2 === 1
                   ? <strong key={i} style={{ color: C.gold }}>{part}</strong>
                   : <span key={i}>{part}</span>
