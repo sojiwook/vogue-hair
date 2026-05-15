@@ -17,11 +17,11 @@ const C = {
   kakao: "#FEE500",
 };
 
-async function callAI(prompt, imgBase64, imgType, onChunk, label, customerName, customerAge) {
+async function callAI(prompt, imgBase64, imgType, onChunk, label, customerName, customerAge, fullCustomerInfo) {
   const body = {
     prompt,
     image: imgBase64 ? { data: imgBase64, mimeType: imgType || "image/jpeg" } : null,
-    customerInfo: { label: label || "두피", name: customerName || "고객", age: customerAge || 0 },
+    customerInfo: fullCustomerInfo || { label: label || "두피", name: customerName || "고객", age: customerAge || 0 },
   };
   const res = await fetch("/api/analyze", {
     method: "POST",
@@ -338,16 +338,50 @@ function ScalpTab({ customer, onUpdate }) {
     setImages(prev => prev.map((im, i) => i === idx ? { ...im, analyzing: true, report: "", done: false } : im));
     const base64 = img.src.split(",")[1];
     const mediaType = img.src.split(";")[0].split(":")[1];
+
+    // 최신 문진 데이터 조회 (실패해도 기본값으로 분석 진행)
+    let surveyData = null;
+    try {
+      const { data: surveyRows } = await supabase
+        .from("surveys")
+        .select("scalp_concerns, scalp_type, shampoo_frequency, sleep, stress")
+        .eq("phone", customer.phone)
+        .order("created_at", { ascending: false })
+        .limit(1);
+      surveyData = surveyRows?.[0] ?? null;
+    } catch { /* 문진 데이터 없으면 기본값 사용 */ }
+
+    const sleepMap = { "5시간 이하": 30, "5~6시간": 50, "6~7시간": 70, "7시간 이상": 85 };
+    const visits = Array.isArray(customer.visits) ? customer.visits : [];
+    // visits는 date ASC 정렬 → 마지막이 최신, 마지막-1이 이전 방문
+    const prevVisit = visits.length >= 2 ? visits[visits.length - 2] : null;
+
+    const customerInfoFull = {
+      name: customer.name,
+      age: customer.age,
+      label: img.label,
+      sleep: surveyData?.sleep ? (sleepMap[surveyData.sleep] ?? 50) : 50,
+      stress: surveyData?.stress ? surveyData.stress * 20 : 50,
+      concerns: Array.isArray(surveyData?.scalp_concerns) && surveyData.scalp_concerns.length > 0
+        ? surveyData.scalp_concerns.join(", ")
+        : "없음",
+      scalpType: surveyData?.scalp_type || "미기재",
+      shampooFreq: surveyData?.shampoo_frequency || "미기재",
+      prevMoisture: prevVisit?.moisture ?? null,
+      prevElasticity: prevVisit?.elasticity ?? null,
+    };
+
     try {
       let fullText = "";
       await callAI(
-        `두피 전문 AI입니다. [${img.label}] 두피 이미지를 분석해주세요.\n고객: ${customer.name}님 (${customer.age}세)\n\n**🔬 두피 타입** (판정+근거 1문장)\n**📊 주요 지표**\n- 모공 청결도: XX/100\n- 두피 수분도: XX/100\n- 피지 분비량: XX/100\n- 모낭 건강도: XX/100\n- 염증·자극: XX/100\n**🚨 주의 소견** (2~3개)\n**💆 추천 케어** (2가지)\n**📈 개선 예상**\n\n각 섹션 3줄 이내, 한국어로.`,
+        null,
         base64, mediaType,
         text => {
           fullText += text;
           setImages(prev => prev.map((im, i) => i === idx ? { ...im, report: fullText } : im));
         },
-        img.label, customer.name, customer.age
+        img.label, customer.name, customer.age,
+        customerInfoFull
       );
       setImages(prev => prev.map((im, i) => i === idx ? { ...im, analyzing: false, done: true } : im));
     } catch (e) {
