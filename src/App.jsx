@@ -520,10 +520,13 @@ function ScalpTab({ customer, onUpdate }) {
   );
 }
 
-function HistoryTab({ customer, onAddVisit }) {
+function HistoryTab({ customer, onAddVisit, onUpdate }) {
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [expandedIds, setExpandedIds] = useState([]);
+  const [editingId, setEditingId] = useState(null);
+  const [editForm, setEditForm] = useState({});
+  const [updating, setUpdating] = useState(false);
   const [form, setForm] = useState({
     date: new Date().toISOString().slice(0, 10),
     service: "", sleep: 50, stress: 50, moisture: 50, elasticity: 50, note: ""
@@ -613,6 +616,33 @@ function HistoryTab({ customer, onAddVisit }) {
     setExpandedIds([data.id]);
   };
 
+  const startEdit = (e, visit) => {
+    e.stopPropagation();
+    setEditingId(visit.id);
+    setEditForm({ date: visit.date, service: visit.service || "", sleep: visit.sleep, stress: visit.stress, moisture: visit.moisture, elasticity: visit.elasticity, note: visit.note || "" });
+    setExpandedIds(prev => prev.includes(visit.id) ? prev : [...prev, visit.id]);
+  };
+
+  const cancelEdit = () => setEditingId(null);
+
+  const saveEdit = async () => {
+    setUpdating(true);
+    const updated = { date: editForm.date, service: editForm.service, sleep: Number(editForm.sleep), stress: Number(editForm.stress), moisture: Number(editForm.moisture), elasticity: Number(editForm.elasticity), score: score(editForm), note: editForm.note };
+    const { error } = await supabase.from("visits").update(updated).eq("id", editingId);
+    setUpdating(false);
+    if (error) { alert("수정 실패: " + error.message); return; }
+    onUpdate({ ...customer, visits: visits.map(v => v.id === editingId ? { ...v, ...updated } : v) });
+    setEditingId(null);
+  };
+
+  const deleteVisit = async (e, id) => {
+    e.stopPropagation();
+    if (!window.confirm("이 방문 기록을 삭제하시겠습니까?")) return;
+    const { error } = await supabase.from("visits").delete().eq("id", id);
+    if (error) { alert("삭제 실패: " + error.message); return; }
+    onUpdate({ ...customer, visits: visits.filter(v => v.id !== id) });
+  };
+
   return (
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
@@ -696,14 +726,45 @@ function HistoryTab({ customer, onAddVisit }) {
                   )}
                   {v.service && <span style={{ fontSize: 12, color: C.muted }}>{v.service}</span>}
                 </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                   <Chip score={v.score} />
+                  <button onClick={e => startEdit(e, v)} title="수정" style={{ border: "none", background: "transparent", cursor: "pointer", fontSize: 15, padding: "4px 5px", borderRadius: 6, lineHeight: 1 }}>✏️</button>
+                  <button onClick={e => deleteVisit(e, v.id)} title="삭제" style={{ border: "none", background: "transparent", cursor: "pointer", fontSize: 15, padding: "4px 5px", borderRadius: 6, lineHeight: 1 }}>🗑️</button>
                   <span style={{ color: C.muted, fontSize: 14, transition: "transform 0.2s", display: "inline-block", transform: isExpanded ? "rotate(90deg)" : "rotate(0deg)" }}>›</span>
                 </div>
               </div>
 
               {isExpanded && (
                 <div style={{ padding: "16px 20px" }}>
+                  {editingId === v.id ? (
+                    <div>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+                        <Field label="방문일" value={editForm.date} onChange={val => setEditForm(p => ({ ...p, date: val }))} type="date" />
+                        <Field label="시술 내용" value={editForm.service} onChange={val => setEditForm(p => ({ ...p, service: val }))} placeholder="두피 스케일링 등" />
+                      </div>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+                        {["sleep", "stress", "moisture", "elasticity"].map(k => (
+                          <div key={k}>
+                            <label style={{ fontSize: 12, color: C.sub, fontWeight: 600, display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                              <span>{meta[k].label}</span>
+                              <span style={{ color: meta[k].color, fontWeight: 800 }}>{editForm[k]}</span>
+                            </label>
+                            <input type="range" min={0} max={100} value={editForm[k]}
+                              onChange={e => setEditForm(p => ({ ...p, [k]: e.target.value }))}
+                              style={{ width: "100%", accentColor: meta[k].color }} />
+                          </div>
+                        ))}
+                      </div>
+                      <textarea value={editForm.note} onChange={e => setEditForm(p => ({ ...p, note: e.target.value }))}
+                        placeholder="스타일리스트 메모..."
+                        style={{ width: "100%", height: 60, padding: "8px 12px", border: `1px solid ${C.border}`, borderRadius: 9, fontSize: 13, fontFamily: "inherit", resize: "none", outline: "none", boxSizing: "border-box", marginBottom: 12 }} />
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <Btn variant="ghost" size="sm" onClick={cancelEdit} style={{ flex: 1 }}>취소</Btn>
+                        <Btn variant="gold" size="sm" onClick={saveEdit} disabled={updating} style={{ flex: 2 }}>{updating ? "저장 중..." : "✓ 수정 완료"}</Btn>
+                      </div>
+                    </div>
+                  ) : (
+                  <div>
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 10, marginBottom: 16 }}>
                     {["sleep", "stress", "moisture", "elasticity"].map(k => (
                       <div key={k}>
@@ -776,6 +837,8 @@ function HistoryTab({ customer, onAddVisit }) {
                   >
                     📋 리포트 확인
                   </button>
+                  </div>
+                  )}
                 </div>
               )}
             </Card>
@@ -1011,7 +1074,7 @@ function CustomerDetail({ customer, onBack, onUpdate, onDeleteCustomer }) {
         {TABS.map(t => <button key={t.id} onClick={() => setTab(t.id)} style={{ flex: 1, padding: 10, border: "none", borderRadius: 9, cursor: "pointer", fontFamily: "inherit", fontSize: 13, fontWeight: 700, background: tab === t.id ? "#fff" : "transparent", color: tab === t.id ? C.text : C.muted, boxShadow: tab === t.id ? "0 2px 8px rgba(0,0,0,0.06)" : "none", transition: "all 0.18s" }}>{t.label}</button>)}
       </div>
       <div style={{ display: tab === "scalp" ? "block" : "none" }}><ScalpTab customer={customer} onUpdate={onUpdate} /></div>
-      <div style={{ display: tab === "history" ? "block" : "none" }}><HistoryTab customer={customer} onAddVisit={v => onUpdate({ ...customer, visits: [...visits, v] })} /></div>
+      <div style={{ display: tab === "history" ? "block" : "none" }}><HistoryTab customer={customer} onAddVisit={v => onUpdate({ ...customer, visits: [...visits, v] })} onUpdate={onUpdate} /></div>
       <div style={{ display: tab === "kakao" ? "block" : "none" }}><KakaoTab customer={customer} /></div>
     </div>
   );
