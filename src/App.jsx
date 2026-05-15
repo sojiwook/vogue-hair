@@ -357,8 +357,13 @@ function ScalpTab({ customer, onUpdate }) {
 
 
   const saveReport = async () => {
+    console.log('[saveReport] 함수 시작 — images:', images.map(im => ({ label: im.label, done: im.done, hasReport: !!im.report })));
     const completedImages = images.filter(im => im.done && im.report);
-    if (completedImages.length === 0) return;
+    console.log('[saveReport] completedImages 수:', completedImages.length);
+    if (completedImages.length === 0) {
+      console.warn('[saveReport] 완료된 이미지 없음 → 조기 종료');
+      return;
+    }
 
     const allReportsText = completedImages
       .map(im => "[" + im.label + "]\n" + im.report)
@@ -549,7 +554,7 @@ function ScalpTab({ customer, onUpdate }) {
             <ScalpReportView report={images[activeIdx]?.report} analyzing={images[activeIdx]?.analyzing} />
             {images.some(im => im.done) && (
               <button
-                onClick={saveReport}
+                onClick={() => { console.log('[버튼] 저장 버튼 클릭됨'); saveReport(); }}
                 style={{ marginTop: 12, width: "100%", padding: "10px", background: C.green, color: "#fff", border: "none", borderRadius: 10, fontFamily: "inherit", fontWeight: 700, fontSize: 13, cursor: "pointer" }}
               >
                 💾 분석 결과 저장하기
