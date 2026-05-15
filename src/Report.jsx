@@ -45,6 +45,56 @@ function MetricBar({ label, value, color }) {
   );
 }
 
+function CompareSection({ current, prev }) {
+  const metrics = [
+    { key: "score",      label: "종합 점수",  higherIsBetter: true },
+    { key: "moisture",   label: "수분도",      higherIsBetter: true },
+    { key: "elasticity", label: "탄력도",      higherIsBetter: true },
+    { key: "sleep",      label: "수면 품질",   higherIsBetter: true },
+    { key: "stress",     label: "스트레스",    higherIsBetter: false },
+  ];
+
+  if (!prev) {
+    return (
+      <div style={{ background: C.card, borderRadius: 16, padding: 24, marginBottom: 16, border: `1px solid ${C.border}`, textAlign: "center" }}>
+        <p style={{ fontSize: 14, fontWeight: 800, marginBottom: 8 }}>📈 방문 추이</p>
+        <p style={{ fontSize: 13, color: C.muted }}>첫 방문 기록입니다.<br />다음 방문부터 변화를 확인할 수 있어요</p>
+      </div>
+    );
+  }
+
+  const scoreDiff = current.score - prev.score;
+  const overallGood = scoreDiff > 0;
+
+  return (
+    <div style={{ background: C.card, borderRadius: 16, padding: 24, marginBottom: 16, border: `1px solid ${C.border}` }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+        <h3 style={{ fontSize: 15, fontWeight: 800 }}>📈 지난 방문 대비 변화</h3>
+        <span style={{ fontSize: 12, color: C.muted }}>기준: {prev.date}</span>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 8, marginBottom: 16 }}>
+        {metrics.map(m => {
+          const diff = current[m.key] - prev[m.key];
+          const improved = m.higherIsBetter ? diff > 0 : diff < 0;
+          const color = diff === 0 ? C.muted : improved ? C.green : C.red;
+          const arrow = diff > 0 ? "▲" : diff < 0 ? "▼" : "─";
+          return (
+            <div key={m.key} style={{ textAlign: "center", background: C.bg, borderRadius: 10, padding: "12px 6px" }}>
+              <p style={{ fontSize: 10, color: C.muted, marginBottom: 4 }}>{m.label}</p>
+              <p style={{ fontSize: 20, fontWeight: 900, color }}>{arrow}{Math.abs(diff)}</p>
+              <p style={{ fontSize: 10, color: C.muted, marginTop: 4 }}>{prev[m.key]} → {current[m.key]}</p>
+            </div>
+          );
+        })}
+      </div>
+      <p style={{ fontSize: 13, textAlign: "center", fontWeight: 700,
+        color: scoreDiff === 0 ? C.muted : overallGood ? C.green : C.red }}>
+        {scoreDiff === 0 ? "변화 없음" : overallGood ? "개선되고 있어요 👍" : "관리가 필요해요 ⚠️"}
+      </p>
+    </div>
+  );
+}
+
 export default function Report() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -68,11 +118,11 @@ export default function Report() {
         .select("*")
         .eq("customer_id", customer.id)
         .order("date", { ascending: false })
-        .limit(1);
+        .limit(2);
 
       if (!visits || visits.length === 0) { setError("방문 기록이 없습니다."); setLoading(false); return; }
 
-      setData({ customer, visit: visits[0] });
+      setData({ customer, visit: visits[0], prevVisit: visits[1] || null });
       setLoading(false);
     };
     load();
@@ -90,7 +140,7 @@ export default function Report() {
     </div>
   );
 
-  const { customer, visit } = data;
+  const { customer, visit, prevVisit } = data;
   const scoreColor = visit.score >= 70 ? C.green : visit.score >= 50 ? "#b07800" : C.red;
 
   const parseScalpReport = raw => {
@@ -100,6 +150,9 @@ export default function Report() {
   };
   const scalpParsed = parseScalpReport(visit.scalp_report);
   const scalpText = scalpParsed?.aiAnalysis ?? String(visit.scalp_report ?? "");
+
+  const currentImages = Array.isArray(visit.scalp_images) ? visit.scalp_images : [];
+  const prevImages = Array.isArray(prevVisit?.scalp_images) ? prevVisit.scalp_images : [];
 
   return (
     <div style={{ minHeight: "100vh", background: C.bg, fontFamily: "'Noto Sans KR', sans-serif", color: C.text }}>
@@ -136,6 +189,34 @@ export default function Report() {
           <MetricBar label="두피 수분" value={visit.moisture} color={C.gold} />
           <MetricBar label="모발 탄력" value={visit.elasticity} color={C.green} />
         </div>
+
+        {/* 전후 비교 */}
+        <CompareSection current={visit} prev={prevVisit} />
+
+        {/* 두피 사진 전후 비교 */}
+        {currentImages.length > 0 && prevImages.length > 0 && (
+          <div style={{ background: C.card, borderRadius: 16, padding: 24, marginBottom: 16, border: `1px solid ${C.border}` }}>
+            <h3 style={{ fontSize: 15, fontWeight: 800, marginBottom: 16 }}>📸 두피 사진 변화</h3>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              <div>
+                <p style={{ fontSize: 11, color: C.muted, marginBottom: 8, textAlign: "center" }}>이전 ({prevVisit.date})</p>
+                <div style={{ display: "grid", gridTemplateColumns: prevImages.length > 1 ? "1fr 1fr" : "1fr", gap: 4 }}>
+                  {prevImages.slice(0, 4).map((url, i) => (
+                    <img key={i} src={url} alt={`이전 ${i + 1}`} style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 8 }} />
+                  ))}
+                </div>
+              </div>
+              <div>
+                <p style={{ fontSize: 11, color: C.muted, marginBottom: 8, textAlign: "center" }}>현재 ({visit.date})</p>
+                <div style={{ display: "grid", gridTemplateColumns: currentImages.length > 1 ? "1fr 1fr" : "1fr", gap: 4 }}>
+                  {currentImages.slice(0, 4).map((url, i) => (
+                    <img key={i} src={url} alt={`현재 ${i + 1}`} style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 8 }} />
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* AI 두피 분석 */}
         {scalpText && (

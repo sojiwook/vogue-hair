@@ -402,12 +402,13 @@ function ScalpTab({ customer, onUpdate }) {
       .eq("date", today)
       .maybeSingle();
 
+    let visitId, savedVisit, isNew;
+
     if (todayVisit) {
-      await supabase.from("visits").update({
-        scalp_report: reportJson,
-      }).eq("id", todayVisit.id);
-      if (onUpdate) onUpdate({ ...customer, visits: [...(customer.visits || []).filter(v => v.id !== todayVisit.id), { ...todayVisit, scalp_report: reportJson }] });
-      alert("✅ 두피 분석 결과가 저장됐어요!");
+      await supabase.from("visits").update({ scalp_report: reportJson }).eq("id", todayVisit.id);
+      visitId = todayVisit.id;
+      savedVisit = { ...todayVisit, scalp_report: reportJson };
+      isNew = false;
     } else {
       const { data: newVisit } = await supabase.from("visits").insert({
         customer_id: customer.id,
@@ -420,9 +421,47 @@ function ScalpTab({ customer, onUpdate }) {
         score: 51,
         scalp_report: reportJson,
       }).select().single();
-      if (onUpdate) onUpdate({ ...customer, visits: [...(customer.visits || []), newVisit] });
-      alert("✅ 방문 기록 + 두피 분석 저장 완료!");
+      visitId = newVisit?.id;
+      savedVisit = newVisit;
+      isNew = true;
     }
+
+    // Storage 사진 업로드
+    if (visitId) {
+      const imageUrls = [];
+      for (const im of completedImages) {
+        try {
+          const base64 = im.src.split(",")[1];
+          const byteStr = atob(base64);
+          const ab = new ArrayBuffer(byteStr.length);
+          const ia = new Uint8Array(ab);
+          for (let j = 0; j < byteStr.length; j++) ia[j] = byteStr.charCodeAt(j);
+          const blob = new Blob([ab], { type: "image/jpeg" });
+          const labelSafe = im.label.replace(/[^a-zA-Z0-9가-힣]/g, "_");
+          const path = `${customer.id}/${visitId}/${labelSafe}_${Date.now()}.jpg`;
+          const { error: upErr } = await supabase.storage
+            .from("scalp-images")
+            .upload(path, blob, { contentType: "image/jpeg", upsert: true });
+          if (!upErr) {
+            const { data: urlData } = supabase.storage.from("scalp-images").getPublicUrl(path);
+            imageUrls.push(urlData.publicUrl);
+          }
+        } catch {}
+      }
+      if (imageUrls.length > 0) {
+        await supabase.from("visits").update({ scalp_images: imageUrls }).eq("id", visitId);
+        savedVisit = { ...savedVisit, scalp_images: imageUrls };
+      }
+    }
+
+    if (onUpdate) {
+      if (isNew) {
+        onUpdate({ ...customer, visits: [...(customer.visits || []), savedVisit] });
+      } else {
+        onUpdate({ ...customer, visits: [...(customer.visits || []).filter(v => v.id !== visitId), savedVisit] });
+      }
+    }
+    alert(isNew ? "✅ 방문 기록 + 두피 분석 저장 완료!" : "✅ 두피 분석 결과가 저장됐어요!");
   };
 
   return (
@@ -516,6 +555,56 @@ function ScalpTab({ customer, onUpdate }) {
           </Card>
         </div>
       )}
+    </div>
+  );
+}
+
+function CompareSection({ current, prev, compact = false }) {
+  const metrics = [
+    { key: "score",      label: "종합 점수",  higherIsBetter: true },
+    { key: "moisture",   label: "수분도",      higherIsBetter: true },
+    { key: "elasticity", label: "탄력도",      higherIsBetter: true },
+    { key: "sleep",      label: "수면 품질",   higherIsBetter: true },
+    { key: "stress",     label: "스트레스",    higherIsBetter: false },
+  ];
+
+  if (!prev) {
+    return (
+      <div style={{ background: C.bg, borderRadius: 10, padding: "10px 14px", marginTop: 12 }}>
+        <p style={{ fontSize: 11, color: C.gold, fontWeight: 800, marginBottom: 3 }}>📈 방문 추이</p>
+        <p style={{ fontSize: 12, color: C.muted }}>첫 방문 기록입니다. 다음 방문부터 변화를 확인할 수 있어요</p>
+      </div>
+    );
+  }
+
+  const scoreDiff = current.score - prev.score;
+  const overallGood = scoreDiff > 0;
+
+  return (
+    <div style={{ background: C.bg, borderRadius: 10, padding: "12px 14px", marginTop: 12 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+        <p style={{ fontSize: 11, fontWeight: 800, color: C.gold }}>📈 지난 방문 대비 변화</p>
+        <p style={{ fontSize: 10, color: C.muted }}>기준: {prev.date}</p>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 5 }}>
+        {metrics.map(m => {
+          const diff = current[m.key] - prev[m.key];
+          const improved = m.higherIsBetter ? diff > 0 : diff < 0;
+          const color = diff === 0 ? C.muted : improved ? C.green : C.red;
+          const arrow = diff > 0 ? "▲" : diff < 0 ? "▼" : "─";
+          return (
+            <div key={m.key} style={{ textAlign: "center", background: "#fff", borderRadius: 8, padding: "8px 4px" }}>
+              <p style={{ fontSize: 9, color: C.muted, marginBottom: 3 }}>{m.label}</p>
+              <p style={{ fontSize: 15, fontWeight: 900, color }}>{arrow}{Math.abs(diff)}</p>
+              <p style={{ fontSize: 9, color: C.muted }}>{prev[m.key]}→{current[m.key]}</p>
+            </div>
+          );
+        })}
+      </div>
+      <p style={{ fontSize: 11, textAlign: "center", marginTop: 8, fontWeight: 700,
+        color: scoreDiff === 0 ? C.muted : overallGood ? C.green : C.red }}>
+        {scoreDiff === 0 ? "변화 없음" : overallGood ? "개선되고 있어요 👍" : "관리가 필요해요 ⚠️"}
+      </p>
     </div>
   );
 }
@@ -822,6 +911,7 @@ function HistoryTab({ customer, onAddVisit, onUpdate }) {
                       </div>
                     );
                   })()}
+                  <CompareSection current={v} prev={reversedVisits[i + 1] || null} />
                   <button
                     onClick={() => openReport(customer.phone)}
                     style={{
@@ -831,6 +921,7 @@ function HistoryTab({ customer, onAddVisit, onUpdate }) {
                       fontSize: 13, fontWeight: 800, fontFamily: "inherit",
                       cursor: "pointer", display: "flex", alignItems: "center",
                       justifyContent: "center", gap: 6, transition: "all 0.18s",
+                      marginTop: 12,
                     }}
                     onMouseEnter={e => { e.currentTarget.style.background = C.goldBg; }}
                     onMouseLeave={e => { e.currentTarget.style.background = "#fff"; }}
