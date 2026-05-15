@@ -240,7 +240,9 @@ export default function Survey() {
     console.log("[Survey] 오늘 visit 조회 (customer_id:", customerId, ", date:", today, "):", todayVisits, "error:", todayVisitsErr);
     const todayVisit = todayVisits?.[0] ?? null;
 
-    if (!todayVisit) {
+    if (todayVisitsErr) {
+      console.error("[Survey] visit 조회 오류 — INSERT 생략 (중복 방지):", todayVisitsErr);
+    } else if (!todayVisit) {
       const { data: insertedVisit, error: visitInsertErr } = await supabase.from("visits").insert({
         customer_id: customerId,
         date: today,
@@ -257,6 +259,7 @@ export default function Survey() {
         sleep: sleepVal,
         stress: stressVal,
         moisture: moistVal,
+        elasticity,
         score,
       }).eq("id", todayVisit.id).select().single();
       console.log("[Survey] visit UPDATE (id:", todayVisit.id, ") — 결과:", updatedVisit, "error:", visitUpdateErr);

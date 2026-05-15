@@ -400,12 +400,14 @@ function ScalpTab({ customer, onUpdate }) {
     const _d = new Date();
     const today = `${_d.getFullYear()}-${String(_d.getMonth() + 1).padStart(2, '0')}-${String(_d.getDate()).padStart(2, '0')}`;
 
-    const { data: todayVisit } = await supabase
+    const { data: todayVisitRows } = await supabase
       .from("visits")
       .select("*")
       .eq("customer_id", customer.id)
       .eq("date", today)
-      .maybeSingle();
+      .order("id", { ascending: false })
+      .limit(1);
+    const todayVisit = todayVisitRows?.[0] ?? null;
 
     let visitId, savedVisit, isNew;
 
