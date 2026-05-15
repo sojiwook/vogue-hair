@@ -427,27 +427,30 @@ function ScalpTab({ customer, onUpdate }) {
     }
 
     // Storage 사진 업로드
+    console.log('[saveReport] Storage 업로드 시작 — customer.id:', customer.id, '| visitId:', visitId, '| 이미지 수:', completedImages.length);
     if (visitId) {
       const imageUrls = [];
       for (const im of completedImages) {
         try {
-          const base64 = im.src.split(",")[1];
-          const byteStr = atob(base64);
-          const ab = new ArrayBuffer(byteStr.length);
-          const ia = new Uint8Array(ab);
-          for (let j = 0; j < byteStr.length; j++) ia[j] = byteStr.charCodeAt(j);
-          const blob = new Blob([ab], { type: "image/jpeg" });
+          const blob = await fetch(im.src).then(r => r.blob());
           const labelSafe = im.label.replace(/[^a-zA-Z0-9가-힣]/g, "_");
           const path = `${customer.id}/${visitId}/${labelSafe}_${Date.now()}.jpg`;
-          const { error: upErr } = await supabase.storage
+          console.log('[saveReport] 업로드 시도 — path:', path, '| blob size:', blob.size);
+          const { data: upData, error: upErr } = await supabase.storage
             .from("scalp-images")
             .upload(path, blob, { contentType: "image/jpeg", upsert: true });
-          if (!upErr) {
+          if (upErr) {
+            console.error('[saveReport] 업로드 실패 — path:', path, '| error:', upErr);
+          } else {
+            console.log('[saveReport] 업로드 성공 — path:', path, '| data:', upData);
             const { data: urlData } = supabase.storage.from("scalp-images").getPublicUrl(path);
             imageUrls.push(urlData.publicUrl);
           }
-        } catch {}
+        } catch (e) {
+          console.error('[saveReport] 업로드 예외 — label:', im.label, '| error:', e);
+        }
       }
+      console.log('[saveReport] 업로드 완료 — 성공한 URL 수:', imageUrls.length, imageUrls);
       if (imageUrls.length > 0) {
         await supabase.from("visits").update({ scalp_images: imageUrls }).eq("id", visitId);
         savedVisit = { ...savedVisit, scalp_images: imageUrls };
