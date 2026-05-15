@@ -356,9 +356,14 @@ function ScalpTab({ customer, onUpdate }) {
     // visits는 date ASC 정렬 → 마지막이 최신, 마지막-1이 이전 방문
     const prevVisit = visits.length >= 2 ? visits[visits.length - 2] : null;
 
+    const birthDate = customer.birth_date;
+    const currentAge = birthDate
+      ? new Date().getFullYear() - new Date(birthDate).getFullYear()
+      : (customer.age || 0);
+
     const customerInfoFull = {
       name: customer.name,
-      age: customer.age,
+      age: currentAge,
       label: img.label,
       sleep: surveyData?.sleep ? (sleepMap[surveyData.sleep] ?? 50) : 50,
       stress: surveyData?.stress ? surveyData.stress * 20 : 50,
@@ -380,7 +385,7 @@ function ScalpTab({ customer, onUpdate }) {
           fullText += text;
           setImages(prev => prev.map((im, i) => i === idx ? { ...im, report: fullText } : im));
         },
-        img.label, customer.name, customer.age,
+        img.label, customer.name, currentAge,
         customerInfoFull
       );
       setImages(prev => prev.map((im, i) => i === idx ? { ...im, analyzing: false, done: true } : im));
