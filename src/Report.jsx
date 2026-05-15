@@ -95,6 +95,86 @@ function CompareSection({ current, prev }) {
   );
 }
 
+function PhotoGrid({ images, borderColor, compact }) {
+  const labelMap = { top: '정수리', left: '측두부(좌)', right: '측두부(우)', back: '후두부', full: '전체' };
+  const getLabel = (url, i) => {
+    const filename = url.split('/').pop()?.split('_')[0] || '';
+    return labelMap[filename] || `사진 ${i + 1}`;
+  };
+  const n = images.length;
+  if (n === 0) return null;
+  const imgBase = {
+    objectFit: "cover", display: "block",
+    borderRadius: compact ? 6 : 10,
+    ...(borderColor ? { border: `2px solid ${borderColor}` } : { border: `1px solid ${C.border}` }),
+  };
+  const lbl = (url, i) => (
+    <p style={{ fontSize: compact ? 10 : 11, color: compact ? C.muted : C.sub, marginTop: compact ? 2 : 4, fontWeight: 600, marginBottom: 0 }}>
+      {getLabel(url, i)}
+    </p>
+  );
+  const gap = compact ? 4 : 8;
+
+  if (n === 1) {
+    const sz = compact ? 80 : 160;
+    return (
+      <div style={{ display: "flex", justifyContent: "center" }}>
+        <div style={{ textAlign: "center" }}>
+          <img src={images[0]} alt={getLabel(images[0], 0)} style={{ ...imgBase, width: sz, height: sz }} />
+          {lbl(images[0], 0)}
+        </div>
+      </div>
+    );
+  }
+
+  if (n === 5) {
+    const sz = compact ? 76 : 140;
+    return (
+      <div style={{ display: "flex", gap: compact ? 6 : 10, overflowX: "auto", paddingBottom: 4 }}>
+        {images.map((url, i) => (
+          <div key={i} style={{ flexShrink: 0, textAlign: "center" }}>
+            <img src={url} alt={getLabel(url, i)} style={{ ...imgBase, width: sz, height: sz }} />
+            {lbl(url, i)}
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  if (n === 3) {
+    return (
+      <div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap }}>
+          {images.slice(0, 2).map((url, i) => (
+            <div key={i} style={{ textAlign: "center" }}>
+              <img src={url} alt={getLabel(url, i)} style={{ ...imgBase, width: "100%", aspectRatio: "1" }} />
+              {lbl(url, i)}
+            </div>
+          ))}
+        </div>
+        <div style={{ display: "flex", justifyContent: "center", marginTop: gap }}>
+          <div style={{ width: `calc(50% - ${gap / 2}px)`, textAlign: "center" }}>
+            <img src={images[2]} alt={getLabel(images[2], 2)} style={{ ...imgBase, width: "100%", aspectRatio: "1" }} />
+            {lbl(images[2], 2)}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // n === 2 (2열) 또는 n === 4 (2×2 그리드)
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap }}>
+      {images.map((url, i) => (
+        <div key={i} style={{ textAlign: "center" }}>
+          <img src={url} alt={getLabel(url, i)} style={{ ...imgBase, width: "100%", aspectRatio: "1" }} />
+          {lbl(url, i)}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function Report() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -202,21 +282,11 @@ export default function Report() {
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>
                 <div>
                   <p style={{ fontSize: 11, color: C.muted, marginBottom: 8, textAlign: "center", fontWeight: 700 }}>이전 ({prevVisit.date})</p>
-                  <div style={{ display: "grid", gridTemplateColumns: prevImages.length > 1 ? "1fr 1fr" : "1fr", gap: 4 }}>
-                    {prevImages.slice(0, 4).map((url, i) => (
-                      <img key={i} src={url} alt={`이전 ${i + 1}`}
-                        style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 8, display: "block" }} />
-                    ))}
-                  </div>
+                  <PhotoGrid images={prevImages.slice(0, 5)} compact />
                 </div>
                 <div>
                   <p style={{ fontSize: 11, color: C.gold, marginBottom: 8, textAlign: "center", fontWeight: 700 }}>현재 ({visit.date})</p>
-                  <div style={{ display: "grid", gridTemplateColumns: currentImages.length > 1 ? "1fr 1fr" : "1fr", gap: 4 }}>
-                    {currentImages.slice(0, 4).map((url, i) => (
-                      <img key={i} src={url} alt={`현재 ${i + 1}`}
-                        style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 8, border: `2px solid ${C.goldLight}`, display: "block" }} />
-                    ))}
-                  </div>
+                  <PhotoGrid images={currentImages.slice(0, 5)} borderColor={C.goldLight} compact />
                 </div>
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
@@ -241,20 +311,7 @@ export default function Report() {
             /* 단독 표시 레이아웃 */
             <div style={{ background: C.card, borderRadius: 16, padding: 24, marginBottom: 16, border: `1px solid ${C.border}` }}>
               <h3 style={{ fontSize: 15, fontWeight: 800, marginBottom: 16 }}>📸 이번 방문 두피 사진</h3>
-              <div style={{ display: "flex", gap: 12, overflowX: "auto", paddingBottom: 6 }}>
-                {currentImages.map((url, i) => {
-                  const filename = url.split('/').pop()?.split('_')[0] || '';
-                  const labelMap = { top: '정수리', left: '측두부(좌)', right: '측두부(우)', back: '후두부', full: '전체' };
-                  const label = labelMap[filename] || `사진 ${i + 1}`;
-                  return (
-                    <div key={i} style={{ flexShrink: 0, textAlign: "center" }}>
-                      <img src={url} alt={label}
-                        style={{ width: 110, height: 110, objectFit: "cover", borderRadius: 12, border: `2px solid ${C.goldLight}`, display: "block" }} />
-                      <p style={{ fontSize: 11, color: C.sub, marginTop: 6, fontWeight: 600 }}>{label}</p>
-                    </div>
-                  );
-                })}
-              </div>
+              <PhotoGrid images={currentImages} borderColor={C.goldLight} />
             </div>
           )
         )}
