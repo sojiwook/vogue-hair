@@ -438,8 +438,9 @@ function ScalpTab({ customer, onUpdate }) {
       for (const im of completedImages) {
         try {
           const blob = await fetch(im.src).then(r => r.blob());
-          const labelSafe = im.label.replace(/[^a-zA-Z0-9가-힣]/g, "_");
-          const path = `${customer.id}/${visitId}/${labelSafe}_${Date.now()}.jpg`;
+          const labelMap = { '정수리': 'top', '측두부(좌)': 'left', '측두부(우)': 'right', '후두부': 'back', '전체': 'full' };
+          const labelEn = labelMap[im.label] || im.label.replace(/[^a-zA-Z0-9]/g, '_');
+          const path = `${customer.id}/${visitId}/${labelEn}_${Date.now()}.jpg`;
           console.log('[saveReport] 업로드 시도 — path:', path, '| blob size:', blob.size);
           const { data: upData, error: upErr } = await supabase.storage
             .from("scalp-images")
