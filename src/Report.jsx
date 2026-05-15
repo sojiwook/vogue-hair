@@ -193,29 +193,70 @@ export default function Report() {
         {/* 전후 비교 */}
         <CompareSection current={visit} prev={prevVisit} />
 
-        {/* 두피 사진 전후 비교 */}
-        {currentImages.length > 0 && prevImages.length > 0 && (
-          <div style={{ background: C.card, borderRadius: 16, padding: 24, marginBottom: 16, border: `1px solid ${C.border}` }}>
-            <h3 style={{ fontSize: 15, fontWeight: 800, marginBottom: 16 }}>📸 두피 사진 변화</h3>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              <div>
-                <p style={{ fontSize: 11, color: C.muted, marginBottom: 8, textAlign: "center" }}>이전 ({prevVisit.date})</p>
-                <div style={{ display: "grid", gridTemplateColumns: prevImages.length > 1 ? "1fr 1fr" : "1fr", gap: 4 }}>
-                  {prevImages.slice(0, 4).map((url, i) => (
-                    <img key={i} src={url} alt={`이전 ${i + 1}`} style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 8 }} />
-                  ))}
+        {/* 두피 사진 섹션 */}
+        {currentImages.length > 0 && (
+          prevImages.length > 0 ? (
+            /* 전후 비교 레이아웃 */
+            <div style={{ background: C.card, borderRadius: 16, padding: 24, marginBottom: 16, border: `1px solid ${C.border}` }}>
+              <h3 style={{ fontSize: 15, fontWeight: 800, marginBottom: 16 }}>📸 두피 사진 변화</h3>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>
+                <div>
+                  <p style={{ fontSize: 11, color: C.muted, marginBottom: 8, textAlign: "center", fontWeight: 700 }}>이전 ({prevVisit.date})</p>
+                  <div style={{ display: "grid", gridTemplateColumns: prevImages.length > 1 ? "1fr 1fr" : "1fr", gap: 4 }}>
+                    {prevImages.slice(0, 4).map((url, i) => (
+                      <img key={i} src={url} alt={`이전 ${i + 1}`}
+                        style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 8, display: "block" }} />
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <p style={{ fontSize: 11, color: C.gold, marginBottom: 8, textAlign: "center", fontWeight: 700 }}>현재 ({visit.date})</p>
+                  <div style={{ display: "grid", gridTemplateColumns: currentImages.length > 1 ? "1fr 1fr" : "1fr", gap: 4 }}>
+                    {currentImages.slice(0, 4).map((url, i) => (
+                      <img key={i} src={url} alt={`현재 ${i + 1}`}
+                        style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 8, border: `2px solid ${C.goldLight}`, display: "block" }} />
+                    ))}
+                  </div>
                 </div>
               </div>
-              <div>
-                <p style={{ fontSize: 11, color: C.muted, marginBottom: 8, textAlign: "center" }}>현재 ({visit.date})</p>
-                <div style={{ display: "grid", gridTemplateColumns: currentImages.length > 1 ? "1fr 1fr" : "1fr", gap: 4 }}>
-                  {currentImages.slice(0, 4).map((url, i) => (
-                    <img key={i} src={url} alt={`현재 ${i + 1}`} style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 8 }} />
-                  ))}
-                </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                {[{ label: "수분도", key: "moisture", color: C.gold }, { label: "탄력도", key: "elasticity", color: C.green }].map(m => {
+                  const diff = visit[m.key] - prevVisit[m.key];
+                  const diffColor = diff > 0 ? C.green : diff < 0 ? C.red : C.muted;
+                  const arrow = diff > 0 ? "▲" : diff < 0 ? "▼" : "─";
+                  return (
+                    <div key={m.key} style={{ background: C.bg, borderRadius: 10, padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <span style={{ fontSize: 12, color: C.sub }}>{m.label}</span>
+                      <span style={{ fontSize: 12, fontWeight: 800 }}>
+                        <span style={{ color: C.muted }}>{prevVisit[m.key]} → </span>
+                        <span style={{ color: m.color }}>{visit[m.key]}</span>
+                        <span style={{ color: diffColor, fontSize: 11, marginLeft: 4 }}>{arrow}{Math.abs(diff)}</span>
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
             </div>
-          </div>
+          ) : (
+            /* 단독 표시 레이아웃 */
+            <div style={{ background: C.card, borderRadius: 16, padding: 24, marginBottom: 16, border: `1px solid ${C.border}` }}>
+              <h3 style={{ fontSize: 15, fontWeight: 800, marginBottom: 16 }}>📸 이번 방문 두피 사진</h3>
+              <div style={{ display: "flex", gap: 12, overflowX: "auto", paddingBottom: 6 }}>
+                {currentImages.map((url, i) => {
+                  const filename = url.split('/').pop()?.split('_')[0] || '';
+                  const labelMap = { top: '정수리', left: '측두부(좌)', right: '측두부(우)', back: '후두부', full: '전체' };
+                  const label = labelMap[filename] || `사진 ${i + 1}`;
+                  return (
+                    <div key={i} style={{ flexShrink: 0, textAlign: "center" }}>
+                      <img src={url} alt={label}
+                        style={{ width: 110, height: 110, objectFit: "cover", borderRadius: 12, border: `2px solid ${C.goldLight}`, display: "block" }} />
+                      <p style={{ fontSize: 11, color: C.sub, marginTop: 6, fontWeight: 600 }}>{label}</p>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )
         )}
 
         {/* AI 두피 분석 */}
