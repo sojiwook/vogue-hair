@@ -132,18 +132,39 @@ function LoginPage({ onLogin }) {
 
 function CustomerList({ customers, onSelect, onAdd, loading }) {
   const [search, setSearch] = useState("");
+  const [sort, setSort] = useState("recent");
   const list = Array.isArray(customers) ? customers : [];
   const filtered = list.filter(c => (c.name || "").includes(search) || (c.phone || "").includes(search));
+  const sorted = [...filtered].sort((a, b) => {
+    if (sort === "name") return (a.name || "").localeCompare(b.name || "", "ko");
+    if (sort === "joined") return (b.created_at || "").localeCompare(a.created_at || "");
+    // recent: 최신 방문일 내림차순, 방문 없는 고객은 하단
+    const aV = Array.isArray(a.visits) ? a.visits : [];
+    const bV = Array.isArray(b.visits) ? b.visits : [];
+    const aD = aV.length ? (aV[aV.length - 1].date || "") : "";
+    const bD = bV.length ? (bV[bV.length - 1].date || "") : "";
+    if (!aD && !bD) return 0;
+    if (!aD) return 1;
+    if (!bD) return -1;
+    return bD.localeCompare(aD);
+  });
   return (
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 }}>
         <div><h2 style={{ fontSize: 22, fontWeight: 900, marginBottom: 4 }}>고객 관리</h2><p style={{ fontSize: 13, color: C.muted }}>총 {list.length}명</p></div>
         <Btn variant="gold" onClick={onAdd}>+ 신규 고객 등록</Btn>
       </div>
-      <Field value={search} onChange={setSearch} placeholder="🔍 이름 또는 전화번호 검색..." style={{ marginBottom: 16 }} />
+      <div style={{ display: "flex", gap: 8, marginBottom: 16, alignItems: "center" }}>
+        <Field value={search} onChange={setSearch} placeholder="🔍 이름 또는 전화번호 검색..." style={{ flex: 1 }} />
+        <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
+          {[{ key: "recent", label: "최근방문" }, { key: "name", label: "이름순" }, { key: "joined", label: "등록순" }].map(opt => (
+            <button key={opt.key} onClick={() => setSort(opt.key)} style={{ padding: "9px 10px", fontSize: 11, fontWeight: sort === opt.key ? 800 : 500, background: sort === opt.key ? C.gold : "#fff", color: sort === opt.key ? "#fff" : C.sub, border: `1px solid ${sort === opt.key ? C.gold : C.border}`, borderRadius: 8, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap", transition: "all 0.18s" }}>{opt.label}</button>
+          ))}
+        </div>
+      </div>
       {loading ? <div style={{ textAlign: "center", padding: 60, color: C.muted }}><p style={{ fontSize: 32, marginBottom: 8 }}>⏳</p><p>불러오는 중...</p></div> : (
         <div style={{ display: "grid", gap: 10 }}>
-          {filtered.map(c => {
+          {sorted.map(c => {
             const visits = Array.isArray(c.visits) ? c.visits : [];
             const latest = visits[visits.length - 1];
             return (
@@ -163,7 +184,7 @@ function CustomerList({ customers, onSelect, onAdd, loading }) {
               </div>
             );
           })}
-          {filtered.length === 0 && !loading && <div style={{ textAlign: "center", padding: 40, color: C.muted }}><p style={{ fontSize: 32, marginBottom: 8 }}>🔍</p><p>검색 결과가 없습니다</p></div>}
+          {sorted.length === 0 && !loading && <div style={{ textAlign: "center", padding: 40, color: C.muted }}><p style={{ fontSize: 32, marginBottom: 8 }}>🔍</p><p>검색 결과가 없습니다</p></div>}
         </div>
       )}
     </div>
