@@ -164,14 +164,20 @@ export default function Owner() {
     setLoading(true);
     try {
       const [customersRes, visitsRes, surveysRes] = await Promise.all([
-        supabase.from("customers").select("id,gender,birth_date,age,stylist,created_at"),
+        supabase.from("customers").select("id,gender,birth_date,age,stylist,created_at,is_test"),
         supabase.from("visits").select("id,customer_id,date,moisture,elasticity,kakao_message"),
         supabase.from("surveys").select("id,customer_id,scalp_concerns,scalp_type"),
       ]);
 
-      const customers = customersRes.data || [];
-      const visits    = visitsRes.data  || [];
-      const surveys   = surveysRes.data || [];
+      const allCustomers = customersRes.data || [];
+      const allVisits    = visitsRes.data    || [];
+      const allSurveys   = surveysRes.data   || [];
+
+      // is_test = true 고객은 대시보드 통계에서 제외
+      const testIds   = new Set(allCustomers.filter(c => c.is_test === true).map(c => c.id));
+      const customers = allCustomers.filter(c => c.is_test !== true);
+      const visits    = allVisits.filter(v => !testIds.has(v.customer_id));
+      const surveys   = allSurveys.filter(s => !testIds.has(s.customer_id));
 
       const now = new Date();
       const thisMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
