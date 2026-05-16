@@ -178,12 +178,14 @@ export default function Owner() {
       const customers = allCustomers.filter(c => c.is_test !== true);
       const visits    = allVisits.filter(v => !testIds.has(v.customer_id));
 
-      // surveys는 customer_id 없이 phone만 저장될 수 있어 phone으로 customer_id를 resolve
-      const phoneToCustomerId = {};
-      allCustomers.forEach(c => { if (c.phone) phoneToCustomerId[c.phone] = c.id; });
+      // phone → 실고객 객체 맵 (is_test 제외된 customers만 사용)
+      const phoneToCustomer = {};
+      customers.forEach(c => { if (c.phone) phoneToCustomer[c.phone] = c; });
+
+      // surveys를 phone 기준으로 실고객과 직접 연결 (_cust 첨부)
       const surveys = allSurveys
-        .map(s => ({ ...s, customer_id: s.customer_id ?? (s.phone ? phoneToCustomerId[s.phone] : null) }))
-        .filter(s => s.customer_id != null && !testIds.has(s.customer_id));
+        .filter(s => s.phone && phoneToCustomer[s.phone])
+        .map(s => ({ ...s, _cust: phoneToCustomer[s.phone] }));
 
       const now = new Date();
       const thisMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
@@ -273,15 +275,11 @@ export default function Owner() {
       const genderCount = { 여: 0, 남: 0, 기타: 0 };
       customers.forEach(c => { genderCount[normalizeGender(c.gender)]++; });
 
-      // customer_id → 연령대 매핑
-      const customerAgeGroupMap = {};
-      customers.forEach(c => { customerAgeGroupMap[c.id] = getAgeGroup(c, now); });
-
-      // 연령대 × 두피 고민 교차 분석
+      // 연령대 × 두피 고민 교차 분석 (s._cust에서 age 직접 참조)
       const ageGroupConcernsRaw = {};
       surveys.forEach(s => {
         if (!s.scalp_concerns) return;
-        const grp = customerAgeGroupMap[s.customer_id] || "미기재";
+        const grp = getAgeGroup(s._cust, now);
         const items = Array.isArray(s.scalp_concerns)
           ? s.scalp_concerns.filter(Boolean)
           : String(s.scalp_concerns).split(",").map(x => x.trim()).filter(Boolean);
@@ -305,7 +303,7 @@ export default function Owner() {
       // 두피 타입 분포 (surveys.scalp_type — Survey.jsx 저장값 정규화)
       const SCALP_TYPE_NORM = {
         "건성 (당김/건조)": "건성", "지성 (기름짐)": "지성",
-        "복합 (부위별 다름)": "복합", "잘 모르겠음": "잘 모르겠음",
+        "복합 (부위별 다름)": "복합", "잘 모르겠음": "모름",
       };
       const scalpTypeRaw = {};
       surveys.forEach(s => {
