@@ -97,30 +97,78 @@ function CompareSection({ current, prev }) {
 
 function renderMd(text) {
   if (!text) return null;
-  return String(text).split('\n').map((line, li) => {
-    const trimmed = line.trim();
-    if (!trimmed) return null;
-    const headerMatch = trimmed.match(/^#{1,3}\s+(.*)/);
-    if (headerMatch) {
-      const headerText = headerMatch[1].trim();
-      if (!headerText) return null;
-      return (
-        <span key={li} style={{ display: 'block', fontWeight: 800, color: C.gold, marginTop: li > 0 ? 10 : 0, marginBottom: 4 }}>
-          {headerText}
-        </span>
+  const lines = String(text).split('\n');
+  const output = [];
+  let i = 0;
+
+  const isTableLine = s => s.startsWith('|') && s.split('|').length > 2;
+  const isSepLine = s => isTableLine(s) && /^[\|\-\:\s]+$/.test(s);
+  const parseRow = s => s.split('|').slice(1, -1).map(c => c.trim());
+
+  while (i < lines.length) {
+    const trimmed = lines[i].trim();
+
+    if (isTableLine(trimmed)) {
+      const startI = i;
+      const block = [];
+      while (i < lines.length && isTableLine(lines[i].trim())) {
+        block.push(lines[i].trim());
+        i++;
+      }
+      const headers = parseRow(block[0]);
+      const hasSep = block.length > 1 && isSepLine(block[1]);
+      const dataRows = block.slice(hasSep ? 2 : 1).map(parseRow);
+      output.push(
+        <table key={`tbl-${startI}`} style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, marginTop: 8, marginBottom: 8 }}>
+          <thead>
+            <tr>
+              {headers.map((h, j) => (
+                <th key={j} style={{ padding: '7px 10px', textAlign: 'center', border: `1px solid ${C.border}`, background: C.goldBg, fontWeight: 700, color: C.gold }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          {dataRows.length > 0 && (
+            <tbody>
+              {dataRows.map((row, ri) => (
+                <tr key={ri} style={{ background: ri % 2 === 0 ? C.card : C.bg }}>
+                  {row.map((cell, ci) => (
+                    <td key={ci} style={{ padding: '6px 10px', textAlign: 'center', border: `1px solid ${C.border}`, color: C.text }}>{cell}</td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          )}
+        </table>
       );
+    } else {
+      if (!trimmed) { i++; continue; }
+      const headerMatch = trimmed.match(/^#{1,3}\s+(.*)/);
+      if (headerMatch) {
+        const headerText = headerMatch[1].trim();
+        if (headerText) {
+          output.push(
+            <span key={i} style={{ display: 'block', fontWeight: 800, color: C.gold, marginTop: output.length > 0 ? 10 : 0, marginBottom: 4 }}>
+              {headerText}
+            </span>
+          );
+        }
+      } else {
+        const parts = trimmed.split('**');
+        output.push(
+          <span key={i} style={{ display: 'block', marginBottom: 2 }}>
+            {parts.map((part, pi) =>
+              pi % 2 === 1
+                ? <strong key={pi} style={{ color: C.gold }}>{part}</strong>
+                : <span key={pi}>{part}</span>
+            )}
+          </span>
+        );
+      }
+      i++;
     }
-    const parts = trimmed.split('**');
-    return (
-      <span key={li} style={{ display: 'block', marginBottom: 2 }}>
-        {parts.map((part, i) =>
-          i % 2 === 1
-            ? <strong key={i} style={{ color: C.gold }}>{part}</strong>
-            : <span key={i}>{part}</span>
-        )}
-      </span>
-    );
-  });
+  }
+
+  return output;
 }
 
 function PhotoGrid({ images, borderColor, compact }) {
