@@ -1186,6 +1186,9 @@ function KakaoTab({ customer }) {
 
 function CustomerDetail({ customer, onBack, onUpdate, onDeleteCustomer }) {
   const [tab, setTab] = useState("scalp");
+  const [editingProfile, setEditingProfile] = useState(false);
+  const [profileForm, setProfileForm] = useState({});
+  const [savingProfile, setSavingProfile] = useState(false);
   const TABS = [{ id: "scalp", label: "🔬 두피 분석" }, { id: "history", label: "📅 방문 히스토리" }, { id: "kakao", label: "💬 카카오 발송" }];
   const visits = Array.isArray(customer.visits) ? customer.visits : [];
   const latest = visits[visits.length - 1];
@@ -1195,6 +1198,40 @@ function CustomerDetail({ customer, onBack, onUpdate, onDeleteCustomer }) {
     await supabase.from("visits").delete().eq("customer_id", customer.id);
     await supabase.from("customers").delete().eq("id", customer.id);
     onDeleteCustomer(customer.id);
+  };
+
+  const startEditProfile = () => {
+    setProfileForm({
+      name: customer.name || "",
+      phone: customer.phone || "",
+      birth_date: customer.birth_date || "",
+      gender: customer.gender || "여",
+      stylist: customer.stylist || STYLISTS[0],
+      memo: customer.memo || "",
+    });
+    setEditingProfile(true);
+  };
+
+  const cancelEditProfile = () => setEditingProfile(false);
+
+  const saveProfile = async () => {
+    setSavingProfile(true);
+    const birthYear = profileForm.birth_date ? parseInt(profileForm.birth_date.split('-')[0]) : null;
+    const computedAge = birthYear ? new Date().getFullYear() - birthYear : customer.age;
+    const updates = {
+      name: profileForm.name,
+      phone: profileForm.phone,
+      birth_date: profileForm.birth_date || null,
+      gender: profileForm.gender,
+      stylist: profileForm.stylist,
+      memo: profileForm.memo,
+      age: computedAge,
+    };
+    const { error } = await supabase.from("customers").update(updates).eq("id", customer.id);
+    setSavingProfile(false);
+    if (error) { alert("수정 실패: " + error.message); return; }
+    onUpdate({ ...customer, ...updates });
+    setEditingProfile(false);
   };
 
   return (
@@ -1207,10 +1244,45 @@ function CustomerDetail({ customer, onBack, onUpdate, onDeleteCustomer }) {
             <h2 style={{ fontSize: 20, fontWeight: 900 }}>{customer.name}</h2>
             <span style={{ fontSize: 12, color: C.muted }}>{customer.age}세 · {customer.phone}</span>
             {latest && <Chip score={latest.score} />}
+            <button onClick={startEditProfile} title="고객 정보 수정" style={{ border: "none", background: "transparent", cursor: "pointer", fontSize: 15, padding: "2px 4px", borderRadius: 6, lineHeight: 1 }}>✏️</button>
           </div>
           <p style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>담당: {customer.stylist} · 등록일: {customer.join_date} · 총 {visits.length}회 방문{customer.memo && ` · 📝 ${customer.memo}`}</p>
         </div>
       </div>
+
+      {editingProfile && (
+        <Card style={{ marginBottom: 20, background: C.goldBg, border: `1px solid ${C.goldLight}` }}>
+          <h4 style={{ fontSize: 13, fontWeight: 800, marginBottom: 14 }}>✏️ 고객 정보 수정</h4>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+            <Field label="이름" value={profileForm.name} onChange={v => setProfileForm(p => ({ ...p, name: v }))} placeholder="홍길동" />
+            <Field label="전화번호" value={profileForm.phone} onChange={v => setProfileForm(p => ({ ...p, phone: v }))} placeholder="010-0000-0000" />
+            <Field label="생년월일" value={profileForm.birth_date} onChange={v => setProfileForm(p => ({ ...p, birth_date: v }))} type="date" />
+            <div>
+              <label style={{ fontSize: 12, color: C.sub, display: "block", marginBottom: 5, fontWeight: 600 }}>성별</label>
+              <div style={{ display: "flex", gap: 8 }}>
+                {["여", "남"].map(g => (
+                  <button key={g} onClick={() => setProfileForm(p => ({ ...p, gender: g }))} style={{ flex: 1, padding: "9px", border: `1px solid ${profileForm.gender === g ? C.gold : C.border}`, borderRadius: 9, background: profileForm.gender === g ? C.goldBg : "#fff", color: profileForm.gender === g ? C.gold : C.sub, fontWeight: profileForm.gender === g ? 800 : 400, cursor: "pointer", fontFamily: "inherit", fontSize: 13 }}>{g}</button>
+                ))}
+              </div>
+            </div>
+          </div>
+          <div style={{ marginBottom: 12 }}>
+            <label style={{ fontSize: 12, color: C.sub, display: "block", marginBottom: 5, fontWeight: 600 }}>담당 스타일리스트</label>
+            <select value={profileForm.stylist} onChange={e => setProfileForm(p => ({ ...p, stylist: e.target.value }))} style={{ width: "100%", padding: "10px 14px", border: `1px solid ${C.border}`, borderRadius: 9, fontSize: 13, fontFamily: "inherit", outline: "none" }}>
+              {STYLISTS.map(s => <option key={s}>{s}</option>)}
+            </select>
+          </div>
+          <div style={{ marginBottom: 14 }}>
+            <label style={{ fontSize: 12, color: C.sub, display: "block", marginBottom: 5, fontWeight: 600 }}>메모</label>
+            <textarea value={profileForm.memo} onChange={e => setProfileForm(p => ({ ...p, memo: e.target.value }))} placeholder="알러지, 선호사항..." style={{ width: "100%", height: 70, padding: "10px 14px", border: `1px solid ${C.border}`, borderRadius: 9, fontSize: 13, fontFamily: "inherit", resize: "none", outline: "none", boxSizing: "border-box" }} />
+          </div>
+          <div style={{ display: "flex", gap: 10 }}>
+            <Btn variant="ghost" onClick={cancelEditProfile} style={{ flex: 1 }}>취소</Btn>
+            <Btn variant="gold" onClick={saveProfile} disabled={savingProfile} style={{ flex: 2 }}>{savingProfile ? "저장 중..." : "✓ 저장"}</Btn>
+          </div>
+        </Card>
+      )}
+
       <div style={{ display: "flex", gap: 6, marginBottom: 20, background: "#f0ece4", padding: 5, borderRadius: 12 }}>
         {TABS.map(t => <button key={t.id} onClick={() => setTab(t.id)} style={{ flex: 1, padding: 10, border: "none", borderRadius: 9, cursor: "pointer", fontFamily: "inherit", fontSize: 13, fontWeight: 700, background: tab === t.id ? "#fff" : "transparent", color: tab === t.id ? C.text : C.muted, boxShadow: tab === t.id ? "0 2px 8px rgba(0,0,0,0.06)" : "none", transition: "all 0.18s" }}>{t.label}</button>)}
       </div>
