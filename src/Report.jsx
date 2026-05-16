@@ -141,7 +141,15 @@ function renderMd(text) {
         </table>
       );
     } else {
-      if (!trimmed) { i++; continue; }
+      if (!trimmed || trimmed === '---') { i++; continue; }
+      if (/^##\s*두피\s*분석\s*[-–]/.test(trimmed)) { i++; continue; }
+      if (/^분석\s*부위\s*:/.test(trimmed)) { i++; continue; }
+      const locMatch = trimmed.match(/^\[([^\]]+)\]$/);
+      if (locMatch) {
+        output.push(<span key={i} style={{ display: 'block', fontSize: 12, fontWeight: 800, color: C.gold, marginTop: 10, marginBottom: 4 }}>📍 {locMatch[1]}</span>);
+        i++;
+        continue;
+      }
       const headerMatch = trimmed.match(/^#{1,3}\s+(.*)/);
       if (headerMatch) {
         const headerText = headerMatch[1].trim();
@@ -316,12 +324,6 @@ export default function Report() {
 
   const currentImages = Array.isArray(visit.scalp_images) ? visit.scalp_images : [];
   const prevImages = Array.isArray(prevVisit?.scalp_images) ? prevVisit.scalp_images : [];
-
-  console.log('[Report] visit:', visit?.id, visit?.date);
-  console.log('[Report] scalp_report:', visit?.scalp_report);
-  console.log('[Report] scalp_images:', visit?.scalp_images);
-  console.log('[Report] scalpText:', scalpText);
-  console.log('[Report] currentImages:', currentImages);
 
   return (
     <div style={{ minHeight: "100vh", background: C.bg, fontFamily: "'Noto Sans KR', sans-serif", color: C.text }}>

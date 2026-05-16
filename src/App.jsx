@@ -470,7 +470,7 @@ function ScalpTab({ customer, onUpdate }) {
       savedVisit = { ...todayVisit, scalp_report: reportJson };
       isNew = false;
     } else {
-      const { data: newVisit } = await supabase.from("visits").insert({
+      const { data: newVisit, error: visitInsertErr } = await supabase.from("visits").insert({
         customer_id: customer.id,
         date: today,
         service: "두피 케어",
@@ -481,7 +481,11 @@ function ScalpTab({ customer, onUpdate }) {
         score: 51,
         scalp_report: reportJson,
       }).select().single();
-      visitId = newVisit?.id;
+      if (visitInsertErr || !newVisit) {
+        alert("방문 기록 저장에 실패했습니다. 다시 시도해주세요.");
+        return;
+      }
+      visitId = newVisit.id;
       savedVisit = newVisit;
       isNew = true;
     }
