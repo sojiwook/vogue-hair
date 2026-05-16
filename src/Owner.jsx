@@ -166,7 +166,7 @@ export default function Owner() {
       const [customersRes, visitsRes, surveysRes] = await Promise.all([
         supabase.from("customers").select("id,phone,gender,birth_date,age,stylist,created_at,is_test"),
         supabase.from("visits").select("id,customer_id,date,moisture,elasticity,kakao_message"),
-        supabase.from("surveys").select("id,customer_id,phone,scalp_concerns,scalp_type"),
+        supabase.from("surveys").select("id,phone,scalp_concerns,scalp_type"),
       ]);
 
       const allCustomers = customersRes.data || [];
