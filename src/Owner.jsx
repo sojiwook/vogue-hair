@@ -178,8 +178,8 @@ export default function Owner() {
     try {
       const [customersRes, visitsRes, surveysRes] = await Promise.all([
         supabase.from("customers").select("id,gender,birth_date,age,stylist,created_at"),
-        // FIX ①③④: date 컬럼 사용, kakao_message 컬럼 사용
-        supabase.from("visits").select("id,customer_id,date,stylist,moisture,elasticity,kakao_message"),
+        // stylist은 visits 테이블에 없음 — customers.stylist로 집계
+        supabase.from("visits").select("id,customer_id,date,moisture,elasticity,kakao_message"),
         // FIX ⑤: scalp_concerns 컬럼 사용
         supabase.from("surveys").select("id,customer_id,scalp_concerns"),
       ]);
@@ -228,10 +228,14 @@ export default function Owner() {
         last6Months.push({ label, key, count });
       }
 
+      // ④ stylist은 customers 테이블 기준 — customer_id로 매핑
+      const customerStylistMap = {};
+      customers.forEach(c => { customerStylistMap[c.id] = c.stylist; });
       const stylistVisits = {};
       STYLISTS.forEach(s => { stylistVisits[s] = 0; });
       visits.forEach(v => {
-        if (v.stylist && stylistVisits[v.stylist] !== undefined) stylistVisits[v.stylist]++;
+        const sty = customerStylistMap[v.customer_id];
+        if (sty && stylistVisits[sty] !== undefined) stylistVisits[sty]++;
       });
 
       // ── 두피 건강 ──────────────────────────────────────────
