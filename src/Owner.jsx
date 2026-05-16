@@ -187,6 +187,10 @@ export default function Owner() {
         .filter(s => s.phone && phoneToCustomer[s.phone])
         .map(s => ({ ...s, _cust: phoneToCustomer[s.phone] }));
 
+      console.log('surveys count:', surveys.length);
+      console.log('[Debug] allSurveys count:', allSurveys.length, '/ customers with phone:', customers.filter(c => c.phone).length);
+      if (allSurveys.length > 0) console.log('[Debug] allSurveys[0] sample:', JSON.stringify(allSurveys[0]));
+
       const now = new Date();
       const thisMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 
@@ -358,6 +362,10 @@ export default function Owner() {
         insights.push(`전체 고객 평균 두피 점수는 ${avgScore}점입니다.`);
       }
 
+      console.log('scalpTypeData:', scalpTypes);
+      console.log('ageGroupConcerns:', ageGroupConcerns);
+      console.log('[Debug] scalpTypeRaw:', JSON.stringify(scalpTypeRaw));
+      console.log('[Debug] ageGroupConcernsRaw:', JSON.stringify(ageGroupConcernsRaw));
       setData({
         kpi: { totalCustomers, visitsThisMonth, revisitRate, avgScore, avgMoisture, avgElasticity },
         reportEffect: { reportedCount, notReportedCount, reportedRevisitRate, notReportedRevisitRate, avgDaysAfterReport, reportDiff },
@@ -365,6 +373,13 @@ export default function Owner() {
         profile: { genderCount, ageGroupConcerns, scalpTypes },
         insights,
         top5Concerns,
+        _debug: {
+          allSurveysCount: allSurveys.length,
+          surveysCount: surveys.length,
+          customersWithPhone: customers.filter(c => c.phone).length,
+          scalpTypeRaw,
+          ageGroupConcernsRaw,
+        },
       });
     } catch (e) {
       console.error("[Owner] 데이터 로드 오류:", e);
@@ -568,7 +583,17 @@ export default function Owner() {
                           max={data.profile.scalpTypes[0].count} color={C.goldLight}
                         />
                       ))
-                    : <div style={{ fontSize: 11, color: C.muted }}>문진 데이터 없음</div>
+                    : <div>
+                        <div style={{ fontSize: 11, color: C.muted }}>문진 데이터 없음</div>
+                        {data._debug && (
+                          <div style={{ fontSize: 10, color: C.red, marginTop: 6, lineHeight: 1.7 }}>
+                            DB surveys: {data._debug.allSurveysCount}개<br />
+                            phone 연결: {data._debug.surveysCount}개<br />
+                            고객phone: {data._debug.customersWithPhone}명<br />
+                            scalpTypeRaw: {JSON.stringify(data._debug.scalpTypeRaw)}
+                          </div>
+                        )}
+                      </div>
                   }
                 </div>
               </div>
@@ -601,7 +626,15 @@ export default function Owner() {
                   </div>
                 </>
               ) : (
-                <div style={{ fontSize: 13, color: C.muted }}>문진 데이터가 없습니다.</div>
+                <div>
+                  <div style={{ fontSize: 13, color: C.muted }}>문진 데이터가 없습니다.</div>
+                  {data._debug && (
+                    <div style={{ fontSize: 10, color: C.red, marginTop: 6, lineHeight: 1.7 }}>
+                      surveys: {data._debug.surveysCount}개<br />
+                      ageGroupRaw: {JSON.stringify(data._debug.ageGroupConcernsRaw)}
+                    </div>
+                  )}
+                </div>
               )}
             </Card>
 
