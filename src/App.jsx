@@ -431,13 +431,8 @@ function ScalpTab({ customer, onUpdate }) {
 
 
   const saveReport = async () => {
-    console.log('[saveReport] 함수 시작 — images:', images.map(im => ({ label: im.label, done: im.done, hasReport: !!im.report })));
     const completedImages = images.filter(im => im.done && im.report);
-    console.log('[saveReport] completedImages 수:', completedImages.length);
-    if (completedImages.length === 0) {
-      console.warn('[saveReport] 완료된 이미지 없음 → 조기 종료');
-      return;
-    }
+    if (completedImages.length === 0) return;
 
     const allReportsText = completedImages
       .map(im => "[" + im.label + "]\n" + im.report)
@@ -512,7 +507,6 @@ function ScalpTab({ customer, onUpdate }) {
     }
 
     // Storage 사진 업로드
-    console.log('[saveReport] Storage 업로드 시작 — customer.id:', customer.id, '| visitId:', visitId, '| 이미지 수:', completedImages.length);
     if (visitId) {
       const imageUrls = [];
       for (const im of completedImages) {
@@ -521,22 +515,16 @@ function ScalpTab({ customer, onUpdate }) {
           const labelMap = { '정수리': 'top', '측두부(좌)': 'left', '측두부(우)': 'right', '후두부': 'back', '전체': 'full' };
           const labelEn = labelMap[im.label] || im.label.replace(/[^a-zA-Z0-9]/g, '_');
           const path = `${customer.id}/${visitId}/${labelEn}_${Date.now()}.jpg`;
-          console.log('[saveReport] 업로드 시도 — path:', path, '| blob size:', blob.size);
           const { data: upData, error: upErr } = await supabase.storage
             .from("scalp-images")
             .upload(path, blob, { contentType: "image/jpeg", upsert: true });
-          if (upErr) {
-            console.error('[saveReport] 업로드 실패 — path:', path, '| error:', upErr);
-          } else {
-            console.log('[saveReport] 업로드 성공 — path:', path, '| data:', upData);
+          if (!upErr) {
             const { data: urlData } = supabase.storage.from("scalp-images").getPublicUrl(path);
             imageUrls.push(urlData.publicUrl);
           }
-        } catch (e) {
-          console.error('[saveReport] 업로드 예외 — label:', im.label, '| error:', e);
+        } catch {
         }
       }
-      console.log('[saveReport] 업로드 완료 — 성공한 URL 수:', imageUrls.length, imageUrls);
       if (imageUrls.length > 0) {
         await supabase.from("visits").update({ scalp_images: imageUrls }).eq("id", visitId);
         savedVisit = { ...savedVisit, scalp_images: imageUrls };
@@ -635,7 +623,7 @@ function ScalpTab({ customer, onUpdate }) {
             <ScalpReportView report={images[activeIdx]?.report} analyzing={images[activeIdx]?.analyzing} />
             {images.some(im => im.done) && (
               <button
-                onClick={() => { console.log('[버튼] 저장 버튼 클릭됨'); saveReport(); }}
+                onClick={saveReport}
                 style={{ marginTop: 12, width: "100%", padding: "10px", background: C.green, color: "#fff", border: "none", borderRadius: 10, fontFamily: "inherit", fontWeight: 700, fontSize: 13, cursor: "pointer" }}
               >
                 💾 분석 결과 저장하기
@@ -1346,7 +1334,7 @@ export default function App() {
       const { data: vData } = await supabase.from("visits").select("*").order("date", { ascending: true });
       const merged = (cData || []).map(c => ({ ...c, visits: (vData || []).filter(v => v.customer_id === c.id) }));
       setCustomers(merged);
-    } catch (e) { console.error(e); }
+    } catch { }
     setLoading(false);
   };
 

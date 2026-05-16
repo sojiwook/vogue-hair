@@ -133,7 +133,6 @@ export default function Survey() {
 
   const submit = async () => {
     setSaving(true);
-    console.log("[Survey] submit 시작 — form:", { sleep: form.sleep, stress: form.stress, condition: form.condition, phone: form.phone });
 
     const sleepMap = { "5시간 이하": 30, "5~6시간": 50, "6~7시간": 70, "7시간 이상": 85 };
     const condMap = { "나쁨": 35, "보통": 55, "좋음": 75 };
@@ -145,7 +144,6 @@ export default function Survey() {
       .eq("phone", form.phone)
       .order("created_at", { ascending: false })
       .limit(1);
-    console.log("[Survey] 기존 survey 조회:", existingSurveys, "error:", surveyQueryErr);
     const existingSurvey = existingSurveys?.[0] ?? null;
 
     if (existingSurvey) {
@@ -158,7 +156,6 @@ export default function Survey() {
         shampoo_frequency: form.shampoo_frequency,
         scalp_type: form.scalp_type,
       }).eq("id", existingSurvey.id);
-      console.log("[Survey] survey UPDATE error:", surveyUpdateErr);
     } else {
       const { error: surveyInsertErr } = await supabase.from("surveys").insert({
         name: form.name,
@@ -170,7 +167,6 @@ export default function Survey() {
         shampoo_frequency: form.shampoo_frequency,
         scalp_type: form.scalp_type,
       });
-      console.log("[Survey] survey INSERT error:", surveyInsertErr);
     }
 
     // 2. customers 저장
@@ -180,7 +176,6 @@ export default function Survey() {
       .select("*")
       .eq("phone", form.phone)
       .limit(1);
-    console.log("[Survey] 기존 customer 조회:", existingCustomers, "error:", customerQueryErr);
     const existing = existingCustomers?.[0] ?? null;
 
     let customerId;
@@ -193,7 +188,6 @@ export default function Survey() {
         marketing_agree: form.marketing_agree,
       }).eq("id", existing.id);
       customerId = existing.id;
-      console.log("[Survey] customer UPDATE — customerId:", customerId);
     } else {
       const { data: newCustomer, error: customerInsertErr } = await supabase.from("customers").insert({
         name: form.name,
@@ -206,12 +200,10 @@ export default function Survey() {
         join_date: new Date().toISOString().slice(0, 10),
         memo: "",
       }).select().single();
-      console.log("[Survey] customer INSERT — newCustomer:", newCustomer, "error:", customerInsertErr);
       customerId = newCustomer?.id;
     }
 
     if (!customerId) {
-      console.error("[Survey] customerId 없음 — 종료");
       setSaving(false);
       alert("고객 정보 저장에 실패했습니다. 다시 시도해주세요.");
       return;
@@ -225,7 +217,6 @@ export default function Survey() {
       .order("created_at", { ascending: false })
       .limit(1);
     const surveyRow = surveyRows?.[0] ?? null;
-    console.log("[Survey] surveyRow 재조회:", surveyRow, "error:", surveyRowErr);
 
     const sleepVal = sleepMap[surveyRow?.sleep] ?? sleepMap[form.sleep] ?? 50;
     const stressVal = Number(surveyRow?.stress ?? form.stress) * 20;
@@ -234,25 +225,22 @@ export default function Survey() {
     const score = Math.round(
       sleepVal * 0.2 + (100 - stressVal) * 0.2 + moistVal * 0.3 + elasticity * 0.3
     );
-    console.log("[Survey] 계산된 값 — sleepVal:", sleepVal, "stressVal:", stressVal, "moistVal:", moistVal, "score:", score);
 
     // 4. visits 생성 또는 업데이트 — 로컬 날짜 사용 (UTC 기준이면 KST 오전 9시 이전에 전날 날짜가 들어가는 버그)
     const _d = new Date();
     const today = `${_d.getFullYear()}-${String(_d.getMonth() + 1).padStart(2, '0')}-${String(_d.getDate()).padStart(2, '0')}`;
-    console.log("[Survey] today (로컬):", today);
     const { data: todayVisits, error: todayVisitsErr } = await supabase
       .from("visits")
       .select("id")
       .eq("customer_id", customerId)
       .eq("date", today)
       .limit(1);
-    console.log("[Survey] 오늘 visit 조회 (customer_id:", customerId, ", date:", today, "):", todayVisits, "error:", todayVisitsErr);
     const todayVisit = todayVisits?.[0] ?? null;
 
     if (todayVisitsErr) {
-      console.error("[Survey] visit 조회 오류 — INSERT 생략 (중복 방지):", todayVisitsErr);
+      // visit 조회 오류 시 INSERT 생략 (중복 방지)
     } else if (!todayVisit) {
-      const { data: insertedVisit, error: visitInsertErr } = await supabase.from("visits").insert({
+      await supabase.from("visits").insert({
         customer_id: customerId,
         date: today,
         service: "두피 케어",
@@ -261,17 +249,15 @@ export default function Survey() {
         moisture: moistVal,
         elasticity,
         score,
-      }).select().single();
-      console.log("[Survey] visit INSERT — 결과:", insertedVisit, "error:", visitInsertErr);
+      });
     } else {
-      const { data: updatedVisit, error: visitUpdateErr } = await supabase.from("visits").update({
+      await supabase.from("visits").update({
         sleep: sleepVal,
         stress: stressVal,
         moisture: moistVal,
         elasticity,
         score,
-      }).eq("id", todayVisit.id).select().single();
-      console.log("[Survey] visit UPDATE (id:", todayVisit.id, ") — 결과:", updatedVisit, "error:", visitUpdateErr);
+      }).eq("id", todayVisit.id);
     }
 
     setSaving(false);

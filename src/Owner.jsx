@@ -164,9 +164,9 @@ export default function Owner() {
     setLoading(true);
     try {
       const [customersRes, visitsRes, surveysRes] = await Promise.all([
-        supabase.from("customers").select("id,gender,birth_date,age,stylist,created_at,is_test"),
+        supabase.from("customers").select("id,phone,gender,birth_date,age,stylist,created_at,is_test"),
         supabase.from("visits").select("id,customer_id,date,moisture,elasticity,kakao_message"),
-        supabase.from("surveys").select("id,customer_id,scalp_concerns,scalp_type"),
+        supabase.from("surveys").select("id,customer_id,phone,scalp_concerns,scalp_type"),
       ]);
 
       const allCustomers = customersRes.data || [];
@@ -177,7 +177,13 @@ export default function Owner() {
       const testIds   = new Set(allCustomers.filter(c => c.is_test === true).map(c => c.id));
       const customers = allCustomers.filter(c => c.is_test !== true);
       const visits    = allVisits.filter(v => !testIds.has(v.customer_id));
-      const surveys   = allSurveys.filter(s => !testIds.has(s.customer_id));
+
+      // surveys는 customer_id 없이 phone만 저장될 수 있어 phone으로 customer_id를 resolve
+      const phoneToCustomerId = {};
+      allCustomers.forEach(c => { if (c.phone) phoneToCustomerId[c.phone] = c.id; });
+      const surveys = allSurveys
+        .map(s => ({ ...s, customer_id: s.customer_id ?? (s.phone ? phoneToCustomerId[s.phone] : null) }))
+        .filter(s => s.customer_id != null && !testIds.has(s.customer_id));
 
       const now = new Date();
       const thisMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
@@ -296,11 +302,16 @@ export default function Owner() {
             .map(([label, count]) => ({ label, count })),
         }));
 
-      // 두피 타입 분포 (surveys.scalp_type)
+      // 두피 타입 분포 (surveys.scalp_type — Survey.jsx 저장값 정규화)
+      const SCALP_TYPE_NORM = {
+        "건성 (당김/건조)": "건성", "지성 (기름짐)": "지성",
+        "복합 (부위별 다름)": "복합", "잘 모르겠음": "잘 모르겠음",
+      };
       const scalpTypeRaw = {};
       surveys.forEach(s => {
         if (!s.scalp_type) return;
-        scalpTypeRaw[s.scalp_type] = (scalpTypeRaw[s.scalp_type] || 0) + 1;
+        const lbl = SCALP_TYPE_NORM[s.scalp_type] || s.scalp_type;
+        scalpTypeRaw[lbl] = (scalpTypeRaw[lbl] || 0) + 1;
       });
       const scalpTypes = Object.entries(scalpTypeRaw)
         .sort((a, b) => b[1] - a[1])
