@@ -14,39 +14,49 @@ const C = {
   red: "#d94f4f", green: "#3a8c5c", blue: "#3a6fa8",
 };
 
-const STYLISTS = ["이서", "승미", "우기"];
+// gender 컬럼값 정규화: "여"/"female"/"f" → "여", "남"/"male"/"m" → "남"
+function normalizeGender(g) {
+  if (!g) return "기타";
+  const v = String(g).toLowerCase().trim();
+  if (v === "여" || v === "female" || v === "f" || v === "여성") return "여";
+  if (v === "남" || v === "male" || v === "m" || v === "남성") return "남";
+  return "기타";
+}
+
+function getAgeGroup(customer, now) {
+  const yr = customer.birth_date ? parseInt(customer.birth_date.split("-")[0]) : null;
+  const age = yr ? now.getFullYear() - yr : (customer.age || null);
+  if (!age) return "미기재";
+  if (age < 20) return "10대";
+  if (age < 30) return "20대";
+  if (age < 40) return "30대";
+  if (age < 50) return "40대";
+  if (age < 60) return "50대";
+  return "60대+";
+}
+
+// ── UI Components ─────────────────────────────────────────
 
 function Card({ children, style }) {
   return (
-    <div style={{
-      background: C.card, borderRadius: 14, border: `1px solid ${C.border}`,
-      padding: "18px 16px", marginBottom: 12, ...style,
-    }}>
+    <div style={{ background: C.card, borderRadius: 14, border: `1px solid ${C.border}`, padding: "18px 16px", marginBottom: 12, ...style }}>
       {children}
     </div>
   );
 }
 
-function SectionTitle({ children }) {
+function SectionHeader({ question, subtitle }) {
   return (
-    <div style={{
-      fontSize: 14, fontWeight: 700, color: C.sub,
-      marginBottom: 14, marginTop: 2,
-      paddingBottom: 10, borderBottom: `1px solid ${C.border}`,
-      display: "flex", alignItems: "center", gap: 6,
-    }}>
-      {children}
+    <div style={{ marginBottom: 16, paddingBottom: 12, borderBottom: `1px solid ${C.border}` }}>
+      <div style={{ fontSize: 15, fontWeight: 800, color: C.text }}>{question}</div>
+      {subtitle && <div style={{ fontSize: 11, color: C.muted, marginTop: 3 }}>{subtitle}</div>}
     </div>
   );
 }
 
 function StatRow({ label, value, sub, color, last }) {
   return (
-    <div style={{
-      display: "flex", justifyContent: "space-between", alignItems: "center",
-      paddingBottom: last ? 0 : 10, marginBottom: last ? 0 : 10,
-      borderBottom: last ? "none" : `1px solid ${C.border}`,
-    }}>
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingBottom: last ? 0 : 10, marginBottom: last ? 0 : 10, borderBottom: last ? "none" : `1px solid ${C.border}` }}>
       <span style={{ fontSize: 13, color: C.sub }}>{label}</span>
       <span style={{ fontSize: 15, fontWeight: 700, color: color || C.text }}>
         {value}
@@ -77,42 +87,31 @@ function MiniBar({ label, value, max, color, unit = "명" }) {
   );
 }
 
-function SparkBars({ data, color }) {
-  if (!data || data.length === 0) return null;
-  const max = Math.max(...data.map(d => d.count), 1);
+function KpiCard({ label, value, color, note }) {
   return (
-    <div style={{ display: "flex", alignItems: "flex-end", gap: 5, height: 56, marginTop: 10, marginBottom: 4 }}>
-      {data.map((d, i) => {
-        const isLast = i === data.length - 1;
-        const h = Math.max(4, Math.round((d.count / max) * 50));
-        return (
-          <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 3 }}>
-            <span style={{ fontSize: 10, fontWeight: isLast ? 700 : 400, color: isLast ? C.gold : C.muted }}>{d.count}</span>
-            <div style={{
-              width: "100%", height: h,
-              background: isLast ? C.gold : "#d4b07a44",
-              borderRadius: "3px 3px 0 0",
-            }} />
-            <span style={{ fontSize: 9, color: isLast ? C.gold : C.muted, fontWeight: isLast ? 700 : 400 }}>{d.label}</span>
-          </div>
-        );
-      })}
+    <div style={{ background: C.card, borderRadius: 14, border: `1px solid ${C.border}`, padding: "16px 14px 14px", display: "flex", flexDirection: "column", gap: 4 }}>
+      <div style={{ fontSize: 11, color: C.muted, fontWeight: 500 }}>{label}</div>
+      <div style={{ fontSize: 30, fontWeight: 800, color: color || C.gold, lineHeight: 1.1 }}>{value}</div>
+      {note && <div style={{ fontSize: 11, color: C.sub }}>{note}</div>}
     </div>
   );
 }
 
-function KpiCard({ label, value, color, note }) {
+function CompareCard({ title, count, rate, rateColor, highlighted }) {
   return (
     <div style={{
-      background: C.card, borderRadius: 14, border: `1px solid ${C.border}`,
-      padding: "16px 14px 14px",
-      display: "flex", flexDirection: "column", gap: 4,
+      flex: 1,
+      background: highlighted ? C.goldBg : C.bg,
+      border: `1.5px solid ${highlighted ? C.goldLight : C.border}`,
+      borderRadius: 12,
+      padding: "14px 14px 12px",
     }}>
-      <div style={{ fontSize: 11, color: C.muted, fontWeight: 500 }}>{label}</div>
-      <div style={{ fontSize: 30, fontWeight: 800, color: color || C.gold, lineHeight: 1.1 }}>
-        {value}
+      <div style={{ fontSize: 11, color: C.sub, marginBottom: 8 }}>{title}</div>
+      <div style={{ fontSize: 26, fontWeight: 900, color: rateColor, lineHeight: 1 }}>{rate}%</div>
+      <div style={{ fontSize: 10, color: C.muted, marginTop: 3 }}>재방문율</div>
+      <div style={{ marginTop: 8, paddingTop: 8, borderTop: `1px solid ${highlighted ? C.goldLight : C.border}`, fontSize: 11, color: C.sub }}>
+        해당 고객 <strong style={{ color: C.text }}>{count}명</strong>
       </div>
-      {note && <div style={{ fontSize: 11, color: C.sub }}>{note}</div>}
     </div>
   );
 }
@@ -127,10 +126,7 @@ function PasswordGate({ onUnlock }) {
   };
 
   return (
-    <div style={{
-      minHeight: "100dvh", background: C.bg,
-      display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 24,
-    }}>
+    <div style={{ minHeight: "100dvh", background: C.bg, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 24 }}>
       <div style={{ fontSize: 22, fontWeight: 800, color: C.gold, letterSpacing: 1, marginBottom: 4 }}>VOGUE HAIR</div>
       <div style={{ fontSize: 13, color: C.sub, marginBottom: 32 }}>원장님 전용 대시보드</div>
       <Card style={{ width: "100%", maxWidth: 320 }}>
@@ -142,27 +138,18 @@ function PasswordGate({ onUnlock }) {
           onKeyDown={e => e.key === "Enter" && submit()}
           placeholder="비밀번호"
           autoFocus
-          style={{
-            width: "100%", padding: "11px 12px", borderRadius: 8,
-            border: `1.5px solid ${err ? C.red : C.border}`,
-            fontSize: 15, outline: "none", boxSizing: "border-box",
-            marginBottom: err ? 6 : 14, background: C.bg,
-          }}
+          style={{ width: "100%", padding: "11px 12px", borderRadius: 8, border: `1.5px solid ${err ? C.red : C.border}`, fontSize: 15, outline: "none", boxSizing: "border-box", marginBottom: err ? 6 : 14, background: C.bg }}
         />
         {err && <div style={{ fontSize: 12, color: C.red, marginBottom: 10 }}>비밀번호가 올바르지 않습니다.</div>}
-        <button
-          onClick={submit}
-          style={{
-            width: "100%", padding: "12px 0", background: C.gold, color: "#fff",
-            border: "none", borderRadius: 8, fontWeight: 700, fontSize: 15, cursor: "pointer",
-          }}
-        >
+        <button onClick={submit} style={{ width: "100%", padding: "12px 0", background: C.gold, color: "#fff", border: "none", borderRadius: 8, fontWeight: 700, fontSize: 15, cursor: "pointer" }}>
           확인
         </button>
       </Card>
     </div>
   );
 }
+
+// ── Main ─────────────────────────────────────────────────
 
 export default function Owner() {
   const [unlocked, setUnlocked] = useState(false);
@@ -178,79 +165,142 @@ export default function Owner() {
     try {
       const [customersRes, visitsRes, surveysRes] = await Promise.all([
         supabase.from("customers").select("id,gender,birth_date,age,stylist,created_at"),
-        // stylist은 visits 테이블에 없음 — customers.stylist로 집계
         supabase.from("visits").select("id,customer_id,date,moisture,elasticity,kakao_message"),
-        // FIX ⑤: scalp_concerns 컬럼 사용
-        supabase.from("surveys").select("id,customer_id,scalp_concerns"),
+        supabase.from("surveys").select("id,customer_id,scalp_concerns,scalp_type"),
       ]);
 
       const customers = customersRes.data || [];
-      const visits = visitsRes.data || [];
-      const surveys = surveysRes.data || [];
+      const visits    = visitsRes.data  || [];
+      const surveys   = surveysRes.data || [];
 
       const now = new Date();
       const thisMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 
-      // ── 고객 현황 ──────────────────────────────────────────
+      // ── visits를 customer별로 그룹화 (날짜 오름차순) ──────
+      const visitsByCustomer = {};
+      visits.forEach(v => {
+        if (!visitsByCustomer[v.customer_id]) visitsByCustomer[v.customer_id] = [];
+        visitsByCustomer[v.customer_id].push(v);
+      });
+      Object.values(visitsByCustomer).forEach(arr =>
+        arr.sort((a, b) => (a.date || "").localeCompare(b.date || ""))
+      );
+
+      // ── KPI ───────────────────────────────────────────────
       const totalCustomers = customers.length;
-      const newThisMonth = customers.filter(c => c.created_at?.startsWith(thisMonth)).length;
-
-      const genderCount = { 여: 0, 남: 0, 기타: 0 };
-      customers.forEach(c => {
-        if (c.gender === "여") genderCount["여"]++;
-        else if (c.gender === "남") genderCount["남"]++;
-        else genderCount["기타"]++;
-      });
-
-      const ageGroups = { "10대": 0, "20대": 0, "30대": 0, "40대": 0, "50대": 0, "60대+": 0, "미기재": 0 };
-      customers.forEach(c => {
-        const yr = c.birth_date ? parseInt(c.birth_date.split("-")[0]) : null;
-        const age = yr ? now.getFullYear() - yr : (c.age || null);
-        if (!age) { ageGroups["미기재"]++; return; }
-        if (age < 20) ageGroups["10대"]++;
-        else if (age < 30) ageGroups["20대"]++;
-        else if (age < 40) ageGroups["30대"]++;
-        else if (age < 50) ageGroups["40대"]++;
-        else if (age < 60) ageGroups["50대"]++;
-        else ageGroups["60대+"]++;
-      });
-
-      // ── 방문 현황 ──────────────────────────────────────────
-      // FIX ①: v.date 사용
       const visitsThisMonth = visits.filter(v => v.date?.startsWith(thisMonth)).length;
 
-      const last6Months = [];
-      for (let m = 5; m >= 0; m--) {
-        const d = new Date(now.getFullYear(), now.getMonth() - m, 1);
-        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-        const label = `${d.getMonth() + 1}월`;
-        const count = visits.filter(v => v.date?.startsWith(key)).length;
-        last6Months.push({ label, key, count });
-      }
+      const multiVisitCustomers = Object.values(visitsByCustomer).filter(a => a.length > 1).length;
+      const revisitRate = totalCustomers > 0 ? Math.round((multiVisitCustomers / totalCustomers) * 100) : 0;
 
-      // ④ stylist은 customers 테이블 기준 — customer_id로 매핑
-      const customerStylistMap = {};
-      customers.forEach(c => { customerStylistMap[c.id] = c.stylist; });
-      const stylistVisits = {};
-      STYLISTS.forEach(s => { stylistVisits[s] = 0; });
-      visits.forEach(v => {
-        const sty = customerStylistMap[v.customer_id];
-        if (sty && stylistVisits[sty] !== undefined) stylistVisits[sty]++;
-      });
-
-      // ── 두피 건강 ──────────────────────────────────────────
-      // FIX ②: 0인 값 제외
-      const moistureVals = visits.filter(v => v.moisture != null && v.moisture > 0).map(v => v.moisture);
-      const elasticityVals = visits.filter(v => v.elasticity != null && v.elasticity > 0).map(v => v.elasticity);
-      const avgMoisture = moistureVals.length
-        ? Math.round(moistureVals.reduce((a, b) => a + b, 0) / moistureVals.length) : null;
-      const avgElasticity = elasticityVals.length
-        ? Math.round(elasticityVals.reduce((a, b) => a + b, 0) / elasticityVals.length) : null;
-      const avgScore = (avgMoisture != null && avgElasticity != null)
+      const mVals = visits.filter(v => v.moisture > 0).map(v => v.moisture);
+      const eVals = visits.filter(v => v.elasticity > 0).map(v => v.elasticity);
+      const avgMoisture   = mVals.length ? Math.round(mVals.reduce((a, b) => a + b) / mVals.length) : null;
+      const avgElasticity = eVals.length ? Math.round(eVals.reduce((a, b) => a + b) / eVals.length) : null;
+      const avgScore = avgMoisture != null && avgElasticity != null
         ? Math.round((avgMoisture + avgElasticity) / 2)
         : (avgMoisture ?? avgElasticity);
 
-      // FIX ⑤: scalp_concerns 컬럼, 배열 타입 처리
+      // ── 섹션 1: 리포트 효과 ───────────────────────────────
+      const reportedCustomerIds = new Set(
+        visits.filter(v => v.kakao_message != null).map(v => v.customer_id)
+      );
+      const reportedCount    = reportedCustomerIds.size;
+      const notReportedCount = totalCustomers - reportedCount;
+
+      let reportedRevisitCount = 0;
+      reportedCustomerIds.forEach(cid => {
+        if ((visitsByCustomer[cid]?.length || 0) > 1) reportedRevisitCount++;
+      });
+      const reportedRevisitRate = reportedCount > 0
+        ? Math.round((reportedRevisitCount / reportedCount) * 100) : 0;
+
+      let notReportedRevisitCount = 0;
+      customers.forEach(c => {
+        if (!reportedCustomerIds.has(c.id) && (visitsByCustomer[c.id]?.length || 0) > 1)
+          notReportedRevisitCount++;
+      });
+      const notReportedRevisitRate = notReportedCount > 0
+        ? Math.round((notReportedRevisitCount / notReportedCount) * 100) : 0;
+
+      // 리포트 발송 후 → 다음 방문까지 평균 일수
+      const daysAfterReport = [];
+      visits.filter(v => v.kakao_message != null).forEach(rv => {
+        const cvs = visitsByCustomer[rv.customer_id] || [];
+        const next = cvs.find(v => v.date > rv.date);
+        if (next) {
+          const diff = Math.round((new Date(next.date) - new Date(rv.date)) / 86400000);
+          if (diff > 0 && diff < 365) daysAfterReport.push(diff);
+        }
+      });
+      const avgDaysAfterReport = daysAfterReport.length
+        ? Math.round(daysAfterReport.reduce((a, b) => a + b) / daysAfterReport.length) : null;
+
+      // ── 섹션 2: 방문 주기 ─────────────────────────────────
+      const gapDays = [];
+      Object.values(visitsByCustomer).forEach(cvs => {
+        for (let i = 1; i < cvs.length; i++) {
+          if (!cvs[i].date || !cvs[i - 1].date) continue;
+          const diff = Math.round((new Date(cvs[i].date) - new Date(cvs[i - 1].date)) / 86400000);
+          if (diff > 0 && diff < 365) gapDays.push(diff);
+        }
+      });
+      const avgGapDays = gapDays.length
+        ? Math.round(gapDays.reduce((a, b) => a + b) / gapDays.length) : null;
+
+      const gapBuckets = { "2주 이내": 0, "2~4주": 0, "4~8주": 0, "8주+": 0 };
+      gapDays.forEach(d => {
+        if (d <= 14) gapBuckets["2주 이내"]++;
+        else if (d <= 28) gapBuckets["2~4주"]++;
+        else if (d <= 56) gapBuckets["4~8주"]++;
+        else gapBuckets["8주+"]++;
+      });
+
+      // ── 섹션 3: 고객 프로필 ───────────────────────────────
+      // 성별 (정규화: "남"/"여"/"male"/"female" 모두 처리)
+      const genderCount = { 여: 0, 남: 0, 기타: 0 };
+      customers.forEach(c => { genderCount[normalizeGender(c.gender)]++; });
+
+      // customer_id → 연령대 매핑
+      const customerAgeGroupMap = {};
+      customers.forEach(c => { customerAgeGroupMap[c.id] = getAgeGroup(c, now); });
+
+      // 연령대 × 두피 고민 교차 분석
+      const ageGroupConcernsRaw = {};
+      surveys.forEach(s => {
+        if (!s.scalp_concerns) return;
+        const grp = customerAgeGroupMap[s.customer_id] || "미기재";
+        const items = Array.isArray(s.scalp_concerns)
+          ? s.scalp_concerns.filter(Boolean)
+          : String(s.scalp_concerns).split(",").map(x => x.trim()).filter(Boolean);
+        if (!ageGroupConcernsRaw[grp]) ageGroupConcernsRaw[grp] = {};
+        items.forEach(item => {
+          ageGroupConcernsRaw[grp][item] = (ageGroupConcernsRaw[grp][item] || 0) + 1;
+        });
+      });
+
+      const AGE_ORDER = ["10대", "20대", "30대", "40대", "50대", "60대+", "미기재"];
+      const ageGroupConcerns = AGE_ORDER
+        .filter(grp => ageGroupConcernsRaw[grp])
+        .map(grp => ({
+          ageGroup: grp,
+          concerns: Object.entries(ageGroupConcernsRaw[grp])
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 3)
+            .map(([label, count]) => ({ label, count })),
+        }));
+
+      // 두피 타입 분포 (surveys.scalp_type)
+      const scalpTypeRaw = {};
+      surveys.forEach(s => {
+        if (!s.scalp_type) return;
+        scalpTypeRaw[s.scalp_type] = (scalpTypeRaw[s.scalp_type] || 0) + 1;
+      });
+      const scalpTypes = Object.entries(scalpTypeRaw)
+        .sort((a, b) => b[1] - a[1])
+        .map(([label, count]) => ({ label, count }));
+
+      // ── 섹션 4: AI 인사이트 ───────────────────────────────
       const concernMap = {};
       surveys.forEach(s => {
         if (!s.scalp_concerns) return;
@@ -264,50 +314,42 @@ export default function Owner() {
         .slice(0, 5)
         .map(([label, count]) => ({ label, count }));
 
-      // ── 재방문 지표 ────────────────────────────────────────
-      // FIX ③: v.date 사용
-      const visitsByCustomer = {};
-      visits.forEach(v => {
-        if (!visitsByCustomer[v.customer_id]) visitsByCustomer[v.customer_id] = [];
-        visitsByCustomer[v.customer_id].push(v.date);
-      });
-
-      const multiVisitCounts = Object.values(visitsByCustomer).filter(arr => arr.length > 1).length;
-      const revisitRate = totalCustomers > 0 ? Math.round((multiVisitCounts / totalCustomers) * 100) : 0;
-
-      const gapDays = [];
-      Object.values(visitsByCustomer).forEach(dates => {
-        if (dates.length < 2) return;
-        const sorted = dates.filter(Boolean).sort();
-        for (let i = 1; i < sorted.length; i++) {
-          const diff = Math.round((new Date(sorted[i]) - new Date(sorted[i - 1])) / (1000 * 60 * 60 * 24));
-          if (diff > 0 && diff < 365) gapDays.push(diff);
+      const insights = [];
+      if (top5Concerns.length > 0) {
+        insights.push(`${top5Concerns[0].label} 고민 고객이 ${top5Concerns[0].count}명으로 가장 많습니다.`);
+      }
+      const reportDiff = reportedRevisitRate - notReportedRevisitRate;
+      if (reportedCount > 0 && notReportedCount > 0) {
+        if (reportDiff > 0) {
+          insights.push(`리포트 발송 고객의 재방문율이 미발송 고객보다 ${reportDiff}%p 높습니다.`);
+        } else {
+          insights.push(`리포트 발송 ${reportedCount}명 중 ${reportedRevisitRate}%가 재방문했습니다.`);
         }
-      });
-      const avgGapDays = gapDays.length
-        ? Math.round(gapDays.reduce((a, b) => a + b, 0) / gapDays.length) : null;
-
-      const gapBuckets = { "~2주": 0, "2~4주": 0, "4~8주": 0, "8주+": 0 };
-      gapDays.forEach(d => {
-        if (d <= 14) gapBuckets["~2주"]++;
-        else if (d <= 28) gapBuckets["2~4주"]++;
-        else if (d <= 56) gapBuckets["4~8주"]++;
-        else gapBuckets["8주+"]++;
-      });
-
-      // ── 리포트 발송 ────────────────────────────────────────
-      // FIX ④: kakao_message != null 기준
-      const totalSent = visits.filter(v => v.kakao_message != null).length;
-      const sentThisMonth = visits.filter(v => v.kakao_message != null && v.date?.startsWith(thisMonth)).length;
-      const visitsThisMonthCount = visits.filter(v => v.date?.startsWith(thisMonth)).length;
-      const sendRate = visitsThisMonthCount > 0 ? Math.round((sentThisMonth / visitsThisMonthCount) * 100) : 0;
+      } else if (reportedCount > 0) {
+        insights.push(`리포트 발송 고객 ${reportedCount}명 중 ${reportedRevisitRate}%가 재방문했습니다.`);
+      }
+      if (avgGapDays) {
+        insights.push(`평균 방문 주기는 ${avgGapDays}일(약 ${Math.round(avgGapDays / 7)}주)입니다.`);
+      }
+      const majorGender = genderCount["여"] >= genderCount["남"] ? "여성" : "남성";
+      const topAgeGroup = Object.entries(ageGroupConcernsRaw)
+        .filter(([g]) => g !== "미기재")
+        .map(([g, concerns]) => [g, Object.values(concerns).reduce((a, b) => a + b, 0)])
+        .sort((a, b) => b[1] - a[1])[0]?.[0];
+      if (topAgeGroup && top5Concerns.length > 0) {
+        insights.push(`${topAgeGroup} ${majorGender} ${top5Concerns[0].label} 두피 고객이 핵심 타겟입니다.`);
+      }
+      if (avgScore != null) {
+        insights.push(`전체 고객 평균 두피 점수는 ${avgScore}점입니다.`);
+      }
 
       setData({
-        customers: { total: totalCustomers, newThisMonth, genderCount, ageGroups },
-        visits: { thisMonth: visitsThisMonth, last6Months, stylistVisits },
-        scalp: { avgMoisture, avgElasticity, avgScore, top5Concerns },
-        revisit: { rate: revisitRate, avgGapDays, gapBuckets },
-        report: { totalSent, sentThisMonth, sendRate },
+        kpi: { totalCustomers, visitsThisMonth, revisitRate, avgScore, avgMoisture, avgElasticity },
+        reportEffect: { reportedCount, notReportedCount, reportedRevisitRate, notReportedRevisitRate, avgDaysAfterReport, reportDiff },
+        visitCycle: { avgGapDays, gapBuckets, totalGaps: gapDays.length },
+        profile: { genderCount, ageGroupConcerns, scalpTypes },
+        insights,
+        top5Concerns,
       });
     } catch (e) {
       console.error("[Owner] 데이터 로드 오류:", e);
@@ -321,22 +363,14 @@ export default function Owner() {
   return (
     <div style={{ minHeight: "100dvh", background: C.bg, fontFamily: "'Pretendard', 'Apple SD Gothic Neo', sans-serif" }}>
       {/* 헤더 */}
-      <div style={{
-        background: C.card, borderBottom: `1px solid ${C.border}`,
-        padding: "14px 20px", display: "flex", justifyContent: "space-between", alignItems: "center",
-        position: "sticky", top: 0, zIndex: 10,
-      }}>
+      <div style={{ background: C.card, borderBottom: `1px solid ${C.border}`, padding: "14px 20px", display: "flex", justifyContent: "space-between", alignItems: "center", position: "sticky", top: 0, zIndex: 10 }}>
         <div>
           <div style={{ fontSize: 16, fontWeight: 800, color: C.gold, letterSpacing: 0.5 }}>VOGUE HAIR</div>
           <div style={{ fontSize: 11, color: C.muted, marginTop: 1 }}>원장님 대시보드</div>
         </div>
         <button
           onClick={() => { window.location.href = "/"; }}
-          style={{
-            fontSize: 12, color: C.sub, background: "none",
-            border: `1px solid ${C.border}`, borderRadius: 7,
-            padding: "6px 12px", cursor: "pointer",
-          }}
+          style={{ fontSize: 12, color: C.sub, background: "none", border: `1px solid ${C.border}`, borderRadius: 7, padding: "6px 12px", cursor: "pointer" }}
         >
           홈으로
         </button>
@@ -351,155 +385,230 @@ export default function Owner() {
 
         {!loading && data && (
           <>
-            {/* KPI 핵심 지표 4개 */}
+            {/* KPI 4개 */}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14 }}>
               <KpiCard
                 label="총 고객"
-                value={`${data.customers.total}명`}
-                note={`이번달 신규 +${data.customers.newThisMonth}명`}
+                value={`${data.kpi.totalCustomers}명`}
                 color={C.gold}
+                note="전체 등록 고객 수"
               />
               <KpiCard
                 label="이번달 방문"
-                value={`${data.visits.thisMonth}회`}
-                note={`전월 ${data.visits.last6Months[4]?.count ?? 0}회`}
+                value={`${data.kpi.visitsThisMonth}회`}
                 color={C.blue}
+                note="이번달 누적 방문"
               />
               <KpiCard
-                label="재방문율"
-                value={`${data.revisit.rate}%`}
-                note={data.revisit.avgGapDays ? `평균 ${data.revisit.avgGapDays}일 주기` : "방문 데이터 축적 중"}
-                color={data.revisit.rate >= 50 ? C.green : C.gold}
+                label="전체 재방문율"
+                value={`${data.kpi.revisitRate}%`}
+                color={data.kpi.revisitRate >= 50 ? C.green : C.gold}
+                note="2회 이상 방문 고객"
               />
               <KpiCard
                 label="평균 두피 점수"
-                value={data.scalp.avgScore != null ? `${data.scalp.avgScore}점` : "—"}
-                note={data.scalp.avgMoisture != null ? `수분 ${data.scalp.avgMoisture} · 탄력 ${data.scalp.avgElasticity ?? "—"}` : "분석 데이터 축적 중"}
+                value={data.kpi.avgScore != null ? `${data.kpi.avgScore}점` : "—"}
                 color={C.gold}
+                note={
+                  data.kpi.avgMoisture != null
+                    ? `수분 ${data.kpi.avgMoisture} · 탄력 ${data.kpi.avgElasticity ?? "—"}`
+                    : "AI 분석 데이터 축적 중"
+                }
               />
             </div>
 
-            {/* 1. 고객 현황 */}
+            {/* ── 섹션 1: 리포트 효과 증명 ── */}
             <Card>
-              <SectionTitle>👥 고객 현황</SectionTitle>
-              <StatRow label="전체 고객" value={`${data.customers.total}명`} />
-              <StatRow label="이번달 신규 등록" value={`${data.customers.newThisMonth}명`} color={C.green} last />
-
-              <div style={{ marginTop: 16, marginBottom: 8, fontSize: 12, fontWeight: 600, color: C.sub }}>성별 분포</div>
-              {["여", "남", "기타"].map(g =>
-                data.customers.genderCount[g] > 0 && (
-                  <MiniBar
-                    key={g}
-                    label={g}
-                    value={data.customers.genderCount[g]}
-                    max={data.customers.total}
-                    color={g === "여" ? "#c7789a" : g === "남" ? C.blue : C.muted}
-                  />
-                )
-              )}
-
-              <div style={{ marginTop: 14, marginBottom: 8, fontSize: 12, fontWeight: 600, color: C.sub }}>연령대 분포</div>
-              {Object.entries(data.customers.ageGroups)
-                .filter(([, v]) => v > 0)
-                .map(([label, value]) => (
-                  <MiniBar key={label} label={label} value={value} max={data.customers.total} />
-                ))}
-            </Card>
-
-            {/* 2. 방문 현황 */}
-            <Card>
-              <SectionTitle>📅 방문 현황</SectionTitle>
-              <StatRow label="이번달 방문" value={`${data.visits.thisMonth}회`} color={C.blue} />
-              <StatRow
-                label="스타일리스트 최다 방문"
-                value={(() => {
-                  const top = Object.entries(data.visits.stylistVisits).sort((a, b) => b[1] - a[1])[0];
-                  return top ? `${top[0]} (${top[1]}회)` : "—";
-                })()}
-                last
+              <SectionHeader
+                question="📊 리포트가 재방문을 만들고 있는가?"
+                subtitle="카카오 알림톡 발송 여부에 따른 재방문율 비교"
               />
 
-              <div style={{ marginTop: 14, marginBottom: 4, fontSize: 12, fontWeight: 600, color: C.sub }}>최근 6개월 방문 추이</div>
-              <SparkBars data={data.visits.last6Months} color={C.gold} />
+              {data.reportEffect.reportedCount === 0 ? (
+                <div style={{ textAlign: "center", padding: "20px 0", color: C.muted, fontSize: 13 }}>
+                  아직 카카오 리포트 발송 기록이 없습니다.
+                </div>
+              ) : (
+                <>
+                  <div style={{ display: "flex", gap: 10, marginBottom: 14 }}>
+                    <CompareCard
+                      title="📨 리포트 받은 고객"
+                      count={data.reportEffect.reportedCount}
+                      rate={data.reportEffect.reportedRevisitRate}
+                      rateColor={data.reportEffect.reportedRevisitRate >= 50 ? C.green : C.gold}
+                      highlighted
+                    />
+                    <CompareCard
+                      title="리포트 없는 고객"
+                      count={data.reportEffect.notReportedCount}
+                      rate={data.reportEffect.notReportedRevisitRate}
+                      rateColor={data.reportEffect.notReportedRevisitRate >= 50 ? C.green : C.sub}
+                      highlighted={false}
+                    />
+                  </div>
 
-              <div style={{ marginTop: 16, marginBottom: 8, fontSize: 12, fontWeight: 600, color: C.sub }}>스타일리스트별 방문</div>
-              {STYLISTS.map(s => (
-                <MiniBar
-                  key={s} label={s}
-                  value={data.visits.stylistVisits[s] || 0}
-                  max={Math.max(...Object.values(data.visits.stylistVisits), 1)}
-                  unit="회"
-                />
-              ))}
+                  {data.reportEffect.reportDiff > 0 && (
+                    <div style={{ background: "#edf7f1", border: "1px solid #a8d5b5", borderRadius: 8, padding: "10px 14px", marginBottom: 12 }}>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: C.green }}>
+                        ✅ 리포트 발송 고객의 재방문율이 {data.reportEffect.reportDiff}%p 높습니다
+                      </span>
+                    </div>
+                  )}
+                  {data.reportEffect.reportDiff <= 0 && data.reportEffect.notReportedCount > 0 && (
+                    <div style={{ background: "#fff8e6", border: `1px solid ${C.goldLight}`, borderRadius: 8, padding: "10px 14px", marginBottom: 12 }}>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: C.gold }}>
+                        📌 데이터가 쌓일수록 발송 효과가 뚜렷해집니다
+                      </span>
+                    </div>
+                  )}
+
+                  {data.reportEffect.avgDaysAfterReport != null ? (
+                    <div style={{ display: "flex", alignItems: "center", gap: 14, background: C.bg, borderRadius: 10, padding: "12px 16px" }}>
+                      <div style={{ fontSize: 28, fontWeight: 900, color: C.blue, lineHeight: 1 }}>
+                        {data.reportEffect.avgDaysAfterReport}일
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: C.text }}>리포트 발송 후 평균 재방문 일수</div>
+                        <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>
+                          약 {Math.round(data.reportEffect.avgDaysAfterReport / 7)}주 후 다시 방문합니다
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ background: C.bg, borderRadius: 10, padding: "12px 16px", fontSize: 12, color: C.muted }}>
+                      리포트 발송 후 재방문 데이터가 아직 없습니다.
+                    </div>
+                  )}
+                </>
+              )}
             </Card>
 
-            {/* 3. 두피 건강 */}
+            {/* ── 섹션 2: 방문 주기 ── */}
             <Card>
-              <SectionTitle>🔬 두피 건강</SectionTitle>
-              <StatRow label="평균 두피 수분도" value={data.scalp.avgMoisture != null ? `${data.scalp.avgMoisture}점` : "—"} color={C.blue} />
-              <StatRow label="평균 모낭 탄력도" value={data.scalp.avgElasticity != null ? `${data.scalp.avgElasticity}점` : "—"} color={C.blue} last />
+              <SectionHeader
+                question="🔄 고객이 더 자주 오고 있는가?"
+                subtitle="2회 이상 방문 고객의 방문 간격 분포"
+              />
 
-              {data.scalp.top5Concerns.length > 0 ? (
+              {data.visitCycle.totalGaps === 0 ? (
+                <div style={{ textAlign: "center", padding: "20px 0", color: C.muted, fontSize: 13 }}>
+                  재방문 데이터가 아직 없습니다.
+                </div>
+              ) : (
                 <>
-                  <div style={{ marginTop: 16, marginBottom: 8, fontSize: 12, fontWeight: 600, color: C.sub }}>두피 고민 TOP 5</div>
-                  {data.scalp.top5Concerns.map((c, i) => (
+                  <div style={{ display: "flex", alignItems: "center", gap: 14, background: C.bg, borderRadius: 10, padding: "12px 16px", marginBottom: 14 }}>
+                    <div style={{ fontSize: 28, fontWeight: 900, color: C.gold, lineHeight: 1 }}>
+                      {data.visitCycle.avgGapDays}일
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: C.text }}>전체 평균 방문 주기</div>
+                      <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>
+                        약 {Math.round(data.visitCycle.avgGapDays / 7)}주마다 방문
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={{ marginBottom: 8, fontSize: 12, fontWeight: 600, color: C.sub }}>방문 주기 분포</div>
+                  {Object.entries(data.visitCycle.gapBuckets).map(([label, value]) => (
                     <MiniBar
-                      key={c.label}
-                      label={`${i + 1}. ${c.label}`}
-                      value={c.count}
-                      max={data.scalp.top5Concerns[0].count}
-                      color={C.goldLight}
+                      key={label} label={label} value={value}
+                      max={Math.max(...Object.values(data.visitCycle.gapBuckets), 1)}
+                      color={C.blue} unit="건"
                     />
                   ))}
                 </>
-              ) : (
-                <div style={{ fontSize: 13, color: C.muted, marginTop: 12 }}>두피 고민 데이터 없음</div>
               )}
             </Card>
 
-            {/* 4. 재방문 지표 */}
+            {/* ── 섹션 3: 고객 프로필 ── */}
             <Card>
-              <SectionTitle>🔄 재방문 지표</SectionTitle>
-              <StatRow
-                label="재방문율"
-                value={`${data.revisit.rate}%`}
-                color={data.revisit.rate >= 50 ? C.green : C.gold}
-              />
-              <StatRow
-                label="평균 재방문 주기"
-                value={data.revisit.avgGapDays != null ? `${data.revisit.avgGapDays}일` : "—"}
-                sub={data.revisit.avgGapDays ? `(약 ${Math.round(data.revisit.avgGapDays / 7)}주)` : ""}
-                last
+              <SectionHeader
+                question="👥 누가 어떤 문제를 갖고 있는가?"
+                subtitle="성별·연령대·두피 고민·두피 타입 분포"
               />
 
-              <div style={{ marginTop: 16, marginBottom: 8, fontSize: 12, fontWeight: 600, color: C.sub }}>방문 주기 분포</div>
-              {Object.entries(data.revisit.gapBuckets).map(([label, value]) => (
-                <MiniBar
-                  key={label} label={label} value={value}
-                  max={Math.max(...Object.values(data.revisit.gapBuckets), 1)}
-                  color={C.blue} unit="건"
-                />
-              ))}
+              {/* 성별 + 두피 타입 2컬럼 */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
+                <div style={{ background: C.bg, borderRadius: 10, padding: "12px 14px" }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: C.sub, marginBottom: 10 }}>성별 분포</div>
+                  {["여", "남", "기타"].map(g =>
+                    data.profile.genderCount[g] > 0 && (
+                      <MiniBar
+                        key={g} label={g} value={data.profile.genderCount[g]}
+                        max={data.kpi.totalCustomers}
+                        color={g === "여" ? "#c7789a" : g === "남" ? C.blue : C.muted}
+                      />
+                    )
+                  )}
+                  {data.profile.genderCount["여"] === 0 && data.profile.genderCount["남"] === 0 && (
+                    <div style={{ fontSize: 11, color: C.muted }}>성별 데이터 없음</div>
+                  )}
+                </div>
+
+                <div style={{ background: C.bg, borderRadius: 10, padding: "12px 14px" }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: C.sub, marginBottom: 10 }}>두피 타입</div>
+                  {data.profile.scalpTypes.length > 0
+                    ? data.profile.scalpTypes.map(({ label, count }) => (
+                        <MiniBar key={label} label={label} value={count}
+                          max={data.profile.scalpTypes[0].count} color={C.goldLight}
+                        />
+                      ))
+                    : <div style={{ fontSize: 11, color: C.muted }}>문진 데이터 없음</div>
+                  }
+                </div>
+              </div>
+
+              {/* 연령대별 두피 고민 교차 분석 */}
+              {data.profile.ageGroupConcerns.length > 0 ? (
+                <>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: C.sub, marginBottom: 10 }}>연령대별 두피 고민 TOP 3</div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    {data.profile.ageGroupConcerns.map(({ ageGroup, concerns }) => (
+                      <div key={ageGroup} style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "10px 12px", background: C.bg, borderRadius: 10 }}>
+                        <div style={{ minWidth: 38, fontSize: 12, fontWeight: 800, color: C.gold, paddingTop: 2 }}>
+                          {ageGroup}
+                        </div>
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+                          {concerns.map((c, i) => (
+                            <span key={c.label} style={{
+                              fontSize: 11, padding: "3px 9px", borderRadius: 99,
+                              background: i === 0 ? C.gold : "#fff",
+                              color: i === 0 ? "#fff" : C.sub,
+                              border: `1px solid ${i === 0 ? C.gold : C.border}`,
+                              fontWeight: i === 0 ? 700 : 400,
+                            }}>
+                              {c.label} {c.count}명
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <div style={{ fontSize: 13, color: C.muted }}>문진 데이터가 없습니다.</div>
+              )}
             </Card>
 
-            {/* 5. 리포트 발송 */}
-            <Card>
-              <SectionTitle>📨 리포트 발송</SectionTitle>
-              <StatRow label="총 카카오 발송" value={`${data.report.totalSent}건`} />
-              <StatRow label="이번달 발송" value={`${data.report.sentThisMonth}건`} />
-              <StatRow
-                label="이번달 발송률"
-                value={`${data.report.sendRate}%`}
-                color={data.report.sendRate >= 70 ? C.green : data.report.sendRate >= 40 ? C.gold : C.red}
-                last
-              />
-              <div style={{
-                marginTop: 12, padding: "9px 12px",
-                background: C.goldBg, borderRadius: 8,
-                fontSize: 12, color: C.sub, lineHeight: 1.5,
-              }}>
-                이번달 방문 고객 중 카카오 리포트를 발송한 비율입니다.
+            {/* ── 섹션 4: AI 인사이트 ── */}
+            <Card style={{ background: "#1e1a14", border: "none" }}>
+              <div style={{ marginBottom: 16, paddingBottom: 12, borderBottom: "1px solid #3a3020" }}>
+                <div style={{ fontSize: 15, fontWeight: 800, color: C.gold }}>💡 이 데이터로 무엇을 할 수 있는가?</div>
+                <div style={{ fontSize: 11, color: "#a0907a", marginTop: 3 }}>데이터 기반 자동 인사이트</div>
               </div>
+
+              {data.insights.length === 0 ? (
+                <div style={{ fontSize: 13, color: "#a0907a" }}>데이터가 쌓이면 인사이트가 자동으로 생성됩니다.</div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  {data.insights.map((text, i) => (
+                    <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+                      <div style={{ width: 6, height: 6, borderRadius: "50%", background: C.gold, marginTop: 6, flexShrink: 0 }} />
+                      <div style={{ fontSize: 13, color: "#e8dcc8", lineHeight: 1.65 }}>{text}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </Card>
 
             <div style={{ textAlign: "center", fontSize: 11, color: C.muted, marginTop: 8, paddingBottom: 8 }}>
