@@ -331,7 +331,7 @@ export default function Report() {
 
       {/* 헤더 */}
       <div style={{ background: C.gold, padding: "24px", textAlign: "center" }}>
-        <p style={{ fontSize: 11, letterSpacing: "0.3em", color: "rgba(255,255,255,0.8)", marginBottom: 4 }}>VOGUE HAIR WISHCITY</p>
+        <p style={{ fontSize: 11, letterSpacing: "0.3em", color: "rgba(255,255,255,0.8)", marginBottom: 4 }}>SOGAM</p>
         <h1 style={{ fontSize: 20, fontWeight: 900, color: "#fff" }}>두피 케어 리포트</h1>
         <p style={{ fontSize: 12, color: "rgba(255,255,255,0.8)", marginTop: 4 }}>{visit.date} · {customer.stylist} 스타일리스트</p>
       </div>
