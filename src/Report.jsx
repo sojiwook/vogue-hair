@@ -516,9 +516,9 @@ export default function Report() {
 
               {/* Q3 */}
               <div style={{ marginBottom: 24 }}>
-                <p style={{ fontSize: 13, fontWeight: 700, marginBottom: 12 }}>Q3. 다음 방문 의향이 있으신가요?</p>
+                <p style={{ fontSize: 13, fontWeight: 700, marginBottom: 12 }}>Q3. 다음번에도 리포트를 받아보실 의향이 있으신가요?</p>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
-                  {[{ v: 1, l: "없어요" }, { v: 2, l: "고민중" }, { v: 3, l: "꼭 올게요" }].map(({ v, l }) => (
+                  {[{ v: 3, l: "네, 받아볼게요" }, { v: 2, l: "고민해볼게요" }, { v: 1, l: "아니요" }].map(({ v, l }) => (
                     <button key={v} onClick={() => setQ3(v)} style={{
                       padding: "11px 6px", borderRadius: 10, fontFamily: "inherit", fontSize: 12,
                       border: `1.5px solid ${q3 === v ? C.gold : C.border}`,
