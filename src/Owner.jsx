@@ -163,15 +163,17 @@ export default function Owner() {
   async function loadData() {
     setLoading(true);
     try {
-      const [customersRes, visitsRes, surveysRes] = await Promise.all([
+      const [customersRes, visitsRes, surveysRes, satisfactionsRes] = await Promise.all([
         supabase.from("customers").select("id,phone,gender,birth_date,age,stylist,created_at,is_test"),
         supabase.from("visits").select("id,customer_id,date,moisture,elasticity,kakao_message"),
         supabase.from("surveys").select("id,phone,scalp_concerns,scalp_type"),
+        supabase.from("satisfaction").select("id,visit_id,q1_report_helpful,q2_home_care,q3_revisit_intention"),
       ]);
 
-      const allCustomers = customersRes.data || [];
-      const allVisits    = visitsRes.data    || [];
-      const allSurveys   = surveysRes.data   || [];
+      const allCustomers     = customersRes.data     || [];
+      const allVisits        = visitsRes.data        || [];
+      const allSurveys       = surveysRes.data       || [];
+      const allSatisfactions = satisfactionsRes.data || [];
 
       // is_test = true 고객은 대시보드 통계에서 제외
       const testIds   = new Set(allCustomers.filter(c => c.is_test === true).map(c => c.id));
@@ -329,6 +331,30 @@ export default function Owner() {
         .slice(0, 5)
         .map(([label, count]) => ({ label, count }));
 
+      // ── 섹션 5: 만족도 통계 ─────────────────────────────
+      const q1Vals = allSatisfactions.filter(s => s.q1_report_helpful > 0).map(s => s.q1_report_helpful);
+      const avgQ1 = q1Vals.length
+        ? (q1Vals.reduce((a, b) => a + b, 0) / q1Vals.length).toFixed(1)
+        : null;
+
+      const q2Map = {};
+      allSatisfactions.forEach(s => {
+        if (s.q2_home_care) q2Map[s.q2_home_care] = (q2Map[s.q2_home_care] || 0) + 1;
+      });
+      const q2TotalCount = Object.values(q2Map).reduce((a, b) => a + b, 0);
+      const q2Dist = Object.entries(q2Map)
+        .sort((a, b) => b[1] - a[1])
+        .map(([label, count]) => ({
+          label, count,
+          pct: q2TotalCount > 0 ? Math.round((count / q2TotalCount) * 100) : 0,
+        }));
+
+      const q3Answered = allSatisfactions.filter(s => s.q3_revisit_intention > 0);
+      const q3High = q3Answered.filter(s => s.q3_revisit_intention === 3).length;
+      const revisitIntentRate = q3Answered.length > 0
+        ? Math.round((q3High / q3Answered.length) * 100)
+        : null;
+
       const insights = [];
       if (top5Concerns.length > 0) {
         insights.push(`${top5Concerns[0].label} 고민 고객이 ${top5Concerns[0].count}명으로 가장 많습니다.`);
@@ -363,6 +389,7 @@ export default function Owner() {
         reportEffect: { reportedCount, notReportedCount, reportedRevisitRate, notReportedRevisitRate, avgDaysAfterReport, reportDiff },
         visitCycle: { avgGapDays, gapBuckets, totalGaps: gapDays.length },
         profile: { genderCount, ageGroupConcerns, scalpTypes },
+        satisfaction: { avgQ1, q2Dist, revisitIntentRate, total: allSatisfactions.length, q3Total: q3Answered.length },
         insights,
         top5Concerns,
       });
@@ -605,7 +632,56 @@ export default function Owner() {
               )}
             </Card>
 
-            {/* ── 섹션 4: AI 인사이트 ── */}
+            {/* ── 섹션 4: 고객 만족도 ── */}
+            <Card>
+              <SectionHeader
+                question="💛 고객 만족도"
+                subtitle="리포트 하단 소감 응답 통계"
+              />
+
+              {data.satisfaction.total === 0 ? (
+                <div style={{ textAlign: "center", padding: "20px 0", color: C.muted, fontSize: 13 }}>
+                  아직 소감 응답이 없습니다.
+                </div>
+              ) : (
+                <>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 16 }}>
+                    <div style={{ background: C.bg, borderRadius: 10, padding: "12px 10px", textAlign: "center" }}>
+                      <div style={{ fontSize: 10, color: C.muted, marginBottom: 4 }}>응답 수</div>
+                      <div style={{ fontSize: 24, fontWeight: 900, color: C.gold }}>{data.satisfaction.total}</div>
+                      <div style={{ fontSize: 10, color: C.muted }}>건</div>
+                    </div>
+                    <div style={{ background: C.bg, borderRadius: 10, padding: "12px 10px", textAlign: "center" }}>
+                      <div style={{ fontSize: 10, color: C.muted, marginBottom: 4 }}>리포트 만족도 평균</div>
+                      <div style={{ fontSize: 24, fontWeight: 900, color: data.satisfaction.avgQ1 >= 3 ? C.green : C.gold }}>
+                        {data.satisfaction.avgQ1 ?? "—"}
+                      </div>
+                      <div style={{ fontSize: 10, color: C.muted }}>/ 4점</div>
+                    </div>
+                    <div style={{ background: C.bg, borderRadius: 10, padding: "12px 10px", textAlign: "center" }}>
+                      <div style={{ fontSize: 10, color: C.muted, marginBottom: 4 }}>재방문 의향률</div>
+                      <div style={{ fontSize: 24, fontWeight: 900, color: data.satisfaction.revisitIntentRate >= 50 ? C.green : C.gold }}>
+                        {data.satisfaction.revisitIntentRate != null ? `${data.satisfaction.revisitIntentRate}%` : "—"}
+                      </div>
+                      <div style={{ fontSize: 10, color: C.muted }}>"꼭 올게요"</div>
+                    </div>
+                  </div>
+
+                  {data.satisfaction.q2Dist.length > 0 && (
+                    <>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: C.sub, marginBottom: 10 }}>행동 변화 의향 분포 (Q2)</div>
+                      {data.satisfaction.q2Dist.map(({ label, count, pct }) => (
+                        <MiniBar key={label} label={`${label} (${pct}%)`} value={count}
+                          max={data.satisfaction.q2Dist[0].count} color={C.gold} unit="명"
+                        />
+                      ))}
+                    </>
+                  )}
+                </>
+              )}
+            </Card>
+
+            {/* ── 섹션 5: AI 인사이트 ── */}
             <Card style={{ background: "#1e1a14", border: "none" }}>
               <div style={{ marginBottom: 16, paddingBottom: 12, borderBottom: "1px solid #3a3020" }}>
                 <div style={{ fontSize: 15, fontWeight: 800, color: C.gold }}>💡 이 데이터로 무엇을 할 수 있는가?</div>

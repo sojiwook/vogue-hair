@@ -264,6 +264,11 @@ export default function Report() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [q1, setQ1] = useState(null);
+  const [q2, setQ2] = useState(null);
+  const [q3, setQ3] = useState(null);
+  const [satSubmitted, setSatSubmitted] = useState(false);
+  const [satSubmitting, setSatSubmitting] = useState(false);
 
   useEffect(() => {
     const phone = new URLSearchParams(window.location.search).get("phone");
@@ -293,6 +298,24 @@ export default function Report() {
     };
     load();
   }, []);
+
+  useEffect(() => {
+    if (!data) return;
+    const check = async () => {
+      const { data: existing } = await supabase
+        .from("satisfaction")
+        .select("id,q1_report_helpful,q2_home_care,q3_revisit_intention")
+        .eq("visit_id", data.visit.id)
+        .limit(1);
+      if (existing?.[0]) {
+        setQ1(existing[0].q1_report_helpful);
+        setQ2(existing[0].q2_home_care);
+        setQ3(existing[0].q3_revisit_intention);
+        setSatSubmitted(true);
+      }
+    };
+    check();
+  }, [data]);
 
   if (loading) return (
     <div style={{ minHeight: "100vh", background: C.bg, display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -324,6 +347,19 @@ export default function Report() {
 
   const currentImages = Array.isArray(visit.scalp_images) ? visit.scalp_images : [];
   const prevImages = Array.isArray(prevVisit?.scalp_images) ? prevVisit.scalp_images : [];
+
+  const submitSatisfaction = async () => {
+    if (!q1 || !q2 || !q3 || satSubmitted || satSubmitting) return;
+    setSatSubmitting(true);
+    await supabase.from("satisfaction").insert({
+      visit_id: visit.id,
+      q1_report_helpful: q1,
+      q2_home_care: q2,
+      q3_revisit_intention: q3,
+    });
+    setSatSubmitted(true);
+    setSatSubmitting(false);
+  };
 
   return (
     <div style={{ minHeight: "100vh", background: C.bg, fontFamily: "'Noto Sans KR', sans-serif", color: C.text }}>
@@ -427,6 +463,91 @@ export default function Report() {
             <p style={{ fontSize: 13, color: C.sub, lineHeight: 1.8 }}>{visit.note}</p>
           </div>
         )}
+
+        {/* 만족도 */}
+        <div style={{ background: C.card, borderRadius: 16, padding: 24, marginBottom: 16, border: `1px solid ${C.border}` }}>
+          <h3 style={{ fontSize: 15, fontWeight: 800, marginBottom: 20 }}>💛 소감 남기기</h3>
+
+          {satSubmitted ? (
+            <div style={{ textAlign: "center", padding: "16px 0" }}>
+              <div style={{ fontSize: 40, marginBottom: 12 }}>💛</div>
+              <p style={{ fontSize: 16, fontWeight: 800, color: C.gold, marginBottom: 6 }}>감사합니다 💛</p>
+              <p style={{ fontSize: 13, color: C.muted }}>소중한 의견이 더 나은 케어로 이어집니다</p>
+            </div>
+          ) : (
+            <>
+              {/* Q1 */}
+              <div style={{ marginBottom: 20 }}>
+                <p style={{ fontSize: 13, fontWeight: 700, marginBottom: 12 }}>Q1. 오늘 리포트, 얼마나 도움이 됐나요?</p>
+                <div style={{ display: "flex", gap: 8, justifyContent: "center" }}>
+                  {[{ v: 1, e: "😞" }, { v: 2, e: "😐" }, { v: 3, e: "😊" }, { v: 4, e: "🤩" }].map(({ v, e }) => (
+                    <button key={v} onClick={() => setQ1(v)} style={{
+                      width: 60, height: 60, borderRadius: 14,
+                      border: `2px solid ${q1 === v ? C.gold : C.border}`,
+                      background: q1 === v ? C.goldBg : "#fff",
+                      cursor: "pointer", display: "flex", flexDirection: "column",
+                      alignItems: "center", justifyContent: "center", gap: 2,
+                      transition: "all 0.15s",
+                    }}>
+                      <span style={{ fontSize: 24 }}>{e}</span>
+                      <span style={{ fontSize: 10, color: q1 === v ? C.gold : C.muted, fontWeight: q1 === v ? 700 : 400 }}>{v}점</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Q2 */}
+              <div style={{ marginBottom: 20 }}>
+                <p style={{ fontSize: 13, fontWeight: 700, marginBottom: 12 }}>Q2. 집에서 관리해보고 싶은 게 생겼나요?</p>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                  {["샴푸 바꾸기", "두피 마사지", "수면 개선", "없어요"].map(v => (
+                    <button key={v} onClick={() => setQ2(v)} style={{
+                      padding: "11px 8px", borderRadius: 10, fontFamily: "inherit", fontSize: 13,
+                      border: `1.5px solid ${q2 === v ? C.gold : C.border}`,
+                      background: q2 === v ? C.goldBg : "#fff",
+                      color: q2 === v ? C.gold : C.text,
+                      fontWeight: q2 === v ? 700 : 400, cursor: "pointer", transition: "all 0.15s",
+                    }}>
+                      {q2 === v ? "✓ " : ""}{v}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Q3 */}
+              <div style={{ marginBottom: 24 }}>
+                <p style={{ fontSize: 13, fontWeight: 700, marginBottom: 12 }}>Q3. 다음 방문 의향이 있으신가요?</p>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
+                  {[{ v: 1, l: "없어요" }, { v: 2, l: "고민중" }, { v: 3, l: "꼭 올게요" }].map(({ v, l }) => (
+                    <button key={v} onClick={() => setQ3(v)} style={{
+                      padding: "11px 6px", borderRadius: 10, fontFamily: "inherit", fontSize: 12,
+                      border: `1.5px solid ${q3 === v ? C.gold : C.border}`,
+                      background: q3 === v ? C.goldBg : "#fff",
+                      color: q3 === v ? C.gold : C.text,
+                      fontWeight: q3 === v ? 700 : 400, cursor: "pointer", transition: "all 0.15s",
+                    }}>
+                      {q3 === v ? "✓ " : ""}{l}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <button
+                onClick={submitSatisfaction}
+                disabled={!q1 || !q2 || !q3 || satSubmitting}
+                style={{
+                  width: "100%", padding: "14px", borderRadius: 12, border: "none",
+                  background: (q1 && q2 && q3 && !satSubmitting) ? C.gold : C.border,
+                  color: "#fff", fontSize: 15, fontWeight: 700, fontFamily: "inherit",
+                  cursor: (q1 && q2 && q3 && !satSubmitting) ? "pointer" : "not-allowed",
+                  transition: "all 0.2s",
+                }}
+              >
+                {satSubmitting ? "저장 중..." : "💛 소감 남기기"}
+              </button>
+            </>
+          )}
+        </div>
 
         {/* 하단 */}
         <div style={{ textAlign: "center", padding: "20px 0" }}>
