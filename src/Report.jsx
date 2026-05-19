@@ -179,6 +179,36 @@ function renderMd(text) {
   return output;
 }
 
+function renderMarkdown(text) {
+  if (!text) return null;
+  return String(text).split('\n').map((line, i) => {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed === '---') return <br key={i} />;
+    if (/^##\s*두피\s*분석\s*[-–]/.test(trimmed)) return null;
+    if (/^분석\s*부위\s*:/.test(trimmed)) return null;
+    const locMatch = trimmed.match(/^\[([^\]]+)\]$/);
+    if (locMatch) {
+      return <p key={i} style={{ fontSize: 12, fontWeight: 800, color: C.gold, marginTop: 10, marginBottom: 4 }}>📍 {locMatch[1]}</p>;
+    }
+    const headerMatch = trimmed.match(/^#{1,3}\s+(.*)/);
+    if (headerMatch) {
+      const hText = headerMatch[1].trim();
+      if (!hText) return null;
+      return <p key={i} style={{ fontSize: 13, fontWeight: 800, color: C.gold, marginTop: i > 0 ? 12 : 0, marginBottom: 4 }}>{hText}</p>;
+    }
+    const parts = trimmed.split('**');
+    return (
+      <p key={i} style={{ fontSize: 13, color: C.sub, lineHeight: 1.8, marginBottom: 2 }}>
+        {parts.map((part, pi) =>
+          pi % 2 === 1
+            ? <strong key={pi} style={{ fontWeight: 700, color: C.gold }}>{part}</strong>
+            : part
+        )}
+      </p>
+    );
+  });
+}
+
 function PhotoGrid({ images, borderColor, compact }) {
   const labelMap = { top: '정수리', left: '측두부(좌)', right: '측두부(우)', back: '후두부', full: '전체' };
   const getLabel = (url, i) => {
@@ -450,8 +480,8 @@ export default function Report() {
             {scalpParsed?.scalpType && scalpParsed.scalpType !== "분석 참조" && (
               <p style={{ fontSize: 13, color: C.gold, fontWeight: 700, marginBottom: 12 }}>두피 타입: {scalpParsed.scalpType}</p>
             )}
-            <div style={{ fontSize: 13, color: C.sub, lineHeight: 1.9, whiteSpace: "pre-wrap" }}>
-              {renderMd(scalpText)}
+            <div style={{ fontSize: 13, color: C.sub, lineHeight: 1.9 }}>
+              {renderMarkdown(scalpText)}
             </div>
           </div>
         )}
