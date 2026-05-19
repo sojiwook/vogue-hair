@@ -446,6 +446,8 @@ function ScalpTab({ customer, onUpdate }) {
 
     const moistures = completedImages.map(im => extractNum(im.report, /두피\s*수분도[^\d]*(\d+)/)).filter(v => v !== null);
     const elasticities = completedImages.map(im => extractNum(im.report, /모낭\s*건강도[^\d]*(\d+)/)).filter(v => v !== null);
+    const avgMoisture = moistures.length > 0 ? avg(moistures) : null;
+    const avgElasticity = elasticities.length > 0 ? avg(elasticities) : null;
 
     const firstReport = completedImages[0].report;
     const SCALP_TYPES = ["건성", "지성", "복합성", "민감성", "정상", "예민"];
@@ -481,9 +483,12 @@ function ScalpTab({ customer, onUpdate }) {
     let visitId, savedVisit, isNew;
 
     if (todayVisit) {
-      await supabase.from("visits").update({ scalp_report: reportJson }).eq("id", todayVisit.id);
+      const updatePayload = { scalp_report: reportJson };
+      if (avgMoisture !== null) updatePayload.moisture = avgMoisture;
+      if (avgElasticity !== null) updatePayload.elasticity = avgElasticity;
+      await supabase.from("visits").update(updatePayload).eq("id", todayVisit.id);
       visitId = todayVisit.id;
-      savedVisit = { ...todayVisit, scalp_report: reportJson };
+      savedVisit = { ...todayVisit, ...updatePayload };
       isNew = false;
     } else {
       const { data: newVisit, error: visitInsertErr } = await supabase.from("visits").insert({
@@ -492,8 +497,8 @@ function ScalpTab({ customer, onUpdate }) {
         service: "두피 케어",
         sleep: 50,
         stress: 50,
-        moisture: 55,
-        elasticity: 50,
+        moisture: avgMoisture ?? 55,
+        elasticity: avgElasticity ?? 50,
         score: 51,
         scalp_report: reportJson,
       }).select().single();
