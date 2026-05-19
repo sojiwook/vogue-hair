@@ -430,7 +430,7 @@ export default function Report() {
 
         {/* 하단 */}
         <div style={{ textAlign: "center", padding: "20px 0" }}>
-          <p style={{ fontSize: 12, color: C.muted, marginBottom: 4 }}>보그헤어위시티점</p>
+          <p style={{ fontSize: 12, color: C.muted, marginBottom: 4 }}>소감</p>
           <p style={{ fontSize: 11, color: C.muted }}>다음 방문에도 건강한 두피로 만나요 ✦</p>
         </div>
       </div>

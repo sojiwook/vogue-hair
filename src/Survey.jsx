@@ -464,7 +464,7 @@ export default function Survey() {
             </div>
           )}
           <div style={{ marginTop: 24, background: C.goldBg, border: `1px solid ${C.goldLight}`, borderRadius: 14, padding: 20 }}>
-            <p style={{ fontSize: 13, color: C.gold, fontWeight: 700 }}>보그헤어위시티점</p>
+            <p style={{ fontSize: 13, color: C.gold, fontWeight: 700 }}>소감</p>
             <p style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>오늘도 좋은 하루 보내세요 ✦</p>
           </div>
         </div>
@@ -482,7 +482,7 @@ export default function Survey() {
         <div style={{ maxWidth: 480, margin: "0 auto", display: "flex", alignItems: "center", gap: 10 }}>
           <div style={{ width: 28, height: 28, borderRadius: 8, background: C.gold, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13 }}>✦</div>
           <div>
-            <p style={{ fontSize: 12, fontWeight: 900, color: C.text }}>보그헤어위시티점</p>
+            <p style={{ fontSize: 12, fontWeight: 900, color: C.text }}>소감</p>
             <p style={{ fontSize: 10, color: C.muted }}>두피 케어 문진표</p>
           </div>
           <span style={{ marginLeft: "auto", fontSize: 12, color: C.muted }}>{step + 1} / {steps.length}</span>
