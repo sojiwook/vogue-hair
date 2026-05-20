@@ -187,7 +187,7 @@ export default function Owner() {
   }, []);
 
   useEffect(() => {
-    if (session && !hasLoadedRef.current) {
+    if (session && !hasLoadedRef.current && session.user?.email === "sojosh@naver.com") {
       hasLoadedRef.current = true;
       loadData();
     }
@@ -439,6 +439,28 @@ export default function Owner() {
     </div>
   );
   if (!session) return <LoginGate />;
+
+  const userEmail = session.user?.email;
+  if (userEmail === "vogwooki@naver.com") return (
+    <div style={{ minHeight: "100dvh", background: C.bg, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 24 }}>
+      <div style={{ textAlign: "center", maxWidth: 360 }}>
+        <div style={{ fontSize: 32, marginBottom: 16 }}>🚫</div>
+        <p style={{ fontSize: 14, fontWeight: 700, color: C.text, marginBottom: 8 }}>스타일리스트 계정으로 로그인되어 있습니다</p>
+        <p style={{ fontSize: 13, color: C.sub, marginBottom: 24, lineHeight: 1.7 }}>스타일리스트 계정은 <a href="/" style={{ color: C.gold, textDecoration: "none", fontWeight: 700 }}>메인 화면</a>에서 로그인해주세요.</p>
+        <button onClick={() => supabase.auth.signOut()} style={{ padding: "12px 24px", background: C.gold, color: "#fff", border: "none", borderRadius: 8, fontWeight: 700, fontSize: 14, cursor: "pointer" }}>확인 (로그아웃)</button>
+      </div>
+    </div>
+  );
+  if (userEmail !== "sojosh@naver.com") return (
+    <div style={{ minHeight: "100dvh", background: C.bg, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 24 }}>
+      <div style={{ textAlign: "center", maxWidth: 360 }}>
+        <div style={{ fontSize: 32, marginBottom: 16 }}>⛔</div>
+        <p style={{ fontSize: 14, fontWeight: 700, color: C.text, marginBottom: 8 }}>접근 권한이 없습니다</p>
+        <p style={{ fontSize: 13, color: C.sub, marginBottom: 24 }}>이 계정은 원장님 대시보드에 접근할 수 없습니다.</p>
+        <button onClick={() => supabase.auth.signOut()} style={{ padding: "12px 24px", background: C.gold, color: "#fff", border: "none", borderRadius: 8, fontWeight: 700, fontSize: 14, cursor: "pointer" }}>로그아웃</button>
+      </div>
+    </div>
+  );
 
   return (
     <div style={{ minHeight: "100dvh", background: C.bg, fontFamily: "'Pretendard', 'Apple SD Gothic Neo', sans-serif" }}>

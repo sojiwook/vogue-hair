@@ -1368,7 +1368,7 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (session && !hasLoadedRef.current) {
+    if (session && !hasLoadedRef.current && session.user?.email === "vogwooki@naver.com") {
       hasLoadedRef.current = true;
       loadData();
     }
@@ -1382,6 +1382,28 @@ export default function App() {
     </div>
   );
   if (!session) return <LoginPage />;
+
+  const userEmail = session.user?.email;
+  if (userEmail === "sojosh@naver.com") return (
+    <div style={{ minHeight: "100vh", background: C.bg, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 24 }}>
+      <div style={{ textAlign: "center", maxWidth: 360 }}>
+        <div style={{ fontSize: 32, marginBottom: 16 }}>🚫</div>
+        <p style={{ fontSize: 15, fontWeight: 800, color: C.text, marginBottom: 8 }}>원장님 계정으로 로그인되어 있습니다</p>
+        <p style={{ fontSize: 13, color: C.sub, marginBottom: 24, lineHeight: 1.7 }}>원장님은 <strong style={{ color: C.gold }}>/owner</strong> 페이지에서 로그인해주세요.</p>
+        <Btn variant="gold" onClick={() => supabase.auth.signOut()}>확인 (로그아웃)</Btn>
+      </div>
+    </div>
+  );
+  if (userEmail !== "vogwooki@naver.com") return (
+    <div style={{ minHeight: "100vh", background: C.bg, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 24 }}>
+      <div style={{ textAlign: "center", maxWidth: 360 }}>
+        <div style={{ fontSize: 32, marginBottom: 16 }}>⛔</div>
+        <p style={{ fontSize: 15, fontWeight: 800, color: C.text, marginBottom: 8 }}>접근 권한이 없습니다</p>
+        <p style={{ fontSize: 13, color: C.sub, marginBottom: 24 }}>이 계정은 스타일리스트 화면에 접근할 수 없습니다.</p>
+        <Btn variant="gold" onClick={() => supabase.auth.signOut()}>로그아웃</Btn>
+      </div>
+    </div>
+  );
 
   return (
     <div style={{ minHeight: "100vh", background: C.bg, fontFamily: "'Noto Sans KR', 'DM Sans', sans-serif", color: C.text }}>
