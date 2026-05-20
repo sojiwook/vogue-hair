@@ -108,7 +108,7 @@ function OptionBtn({ label, selected, onClick }) {
   );
 }
 
-export default function Survey() {
+function Survey() {
   const [step, setStep] = useState(0);
   const [form, setForm] = useState({
     name: "", phone: "", birth_date: "", gender: "", stylist: STYLISTS[0],
@@ -527,4 +527,305 @@ export default function Survey() {
       </div>
     </div>
   );
+}
+
+function RevisitSurvey() {
+  const [step, setStep] = useState(0);
+  const [form, setForm] = useState({
+    phone: "",
+    scalp_change: "",
+    sleep_change: "",
+    stress_change: "",
+    action_taken: "",
+    action_effect: "",
+    scalp_concerns: [],
+  });
+  const [customer, setCustomer] = useState(null);
+  const [checking, setChecking] = useState(false);
+  const [phoneChecked, setPhoneChecked] = useState(false);
+  const [done, setDone] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
+
+  const toggleConcern = (v) => {
+    setForm(p => ({
+      ...p,
+      scalp_concerns: p.scalp_concerns.includes(v)
+        ? p.scalp_concerns.filter(x => x !== v)
+        : [...p.scalp_concerns, v],
+    }));
+  };
+
+  const checkPhone = async () => {
+    if (!form.phone) return;
+    setChecking(true);
+    setPhoneChecked(false);
+    setCustomer(null);
+    const { data: rows } = await supabase
+      .from("customers")
+      .select("id, name, phone")
+      .eq("phone", form.phone)
+      .limit(1);
+    const found = rows?.[0] ?? null;
+    if (found) {
+      const { data: visits } = await supabase
+        .from("visits")
+        .select("date")
+        .eq("customer_id", found.id)
+        .order("date", { ascending: false })
+        .limit(1);
+      const lastDate = visits?.[0]?.date ?? null;
+      const daysSince = lastDate
+        ? Math.floor((new Date() - new Date(lastDate)) / 86400000)
+        : null;
+      setCustomer({ ...found, lastDate, daysSince });
+    }
+    setPhoneChecked(true);
+    setChecking(false);
+  };
+
+  const submit = async () => {
+    if (!customer) return;
+    setSaving(true);
+
+    const { data: existingSurveys } = await supabase
+      .from("surveys")
+      .select("id")
+      .eq("phone", form.phone)
+      .order("created_at", { ascending: false })
+      .limit(1);
+    const existingSurvey = existingSurveys?.[0] ?? null;
+
+    const surveyData = {
+      name: customer.name,
+      scalp_change: form.scalp_change,
+      sleep_change: form.sleep_change,
+      stress_change: form.stress_change,
+      action_taken: form.action_taken,
+      action_effect: form.action_effect || null,
+      scalp_concerns: form.scalp_concerns,
+      visit_type: "revisit",
+    };
+
+    if (existingSurvey) {
+      await supabase.from("surveys").update(surveyData).eq("id", existingSurvey.id);
+    } else {
+      await supabase.from("surveys").insert({ ...surveyData, phone: form.phone });
+    }
+
+    const sleepMap = { "잘 자요": 85, "비슷해요": 70, "못 자요": 50 };
+    const stressMap = { "줄었어요": 20, "비슷해요": 50, "늘었어요": 80 };
+    const sleepVal = sleepMap[form.sleep_change] ?? 70;
+    const stressVal = stressMap[form.stress_change] ?? 50;
+    const score = Math.round(sleepVal * 0.2 + (100 - stressVal) * 0.2 + 50 * 0.3 + 50 * 0.3);
+
+    const _d = new Date();
+    const today = `${_d.getFullYear()}-${String(_d.getMonth() + 1).padStart(2, '0')}-${String(_d.getDate()).padStart(2, '0')}`;
+    const { data: todayVisits } = await supabase
+      .from("visits")
+      .select("id")
+      .eq("customer_id", customer.id)
+      .eq("date", today)
+      .limit(1);
+    const todayVisit = todayVisits?.[0] ?? null;
+
+    const visitData = { sleep: sleepVal, stress: stressVal, moisture: 50, elasticity: 50, score };
+    if (!todayVisit) {
+      await supabase.from("visits").insert({
+        customer_id: customer.id,
+        date: today,
+        service: "두피 케어",
+        ...visitData,
+      });
+    } else {
+      await supabase.from("visits").update(visitData).eq("id", todayVisit.id);
+    }
+
+    setSaving(false);
+    setDone(true);
+  };
+
+  const steps = [
+    {
+      title: "본인 확인", emoji: "👋",
+      content: (
+        <div style={{ display: "grid", gap: 16 }}>
+          <div>
+            <label style={{ fontSize: 13, color: C.sub, display: "block", marginBottom: 6, fontWeight: 600 }}>전화번호</label>
+            <div style={{ display: "flex", gap: 8 }}>
+              <input
+                value={form.phone}
+                onChange={e => { set("phone", e.target.value); setPhoneChecked(false); setCustomer(null); }}
+                onKeyDown={e => e.key === "Enter" && checkPhone()}
+                placeholder="010-0000-0000"
+                style={{ flex: 1, padding: "12px 16px", border: `1.5px solid ${C.border}`, borderRadius: 10, fontSize: 15, fontFamily: "inherit", outline: "none", boxSizing: "border-box" }}
+              />
+              <button
+                onClick={checkPhone}
+                disabled={!form.phone || checking}
+                style={{ padding: "12px 18px", borderRadius: 10, border: "none", background: form.phone && !checking ? C.gold : C.border, color: "#fff", fontSize: 14, fontWeight: 700, fontFamily: "inherit", cursor: form.phone && !checking ? "pointer" : "not-allowed", whiteSpace: "nowrap" }}
+              >{checking ? "확인 중" : "확인"}</button>
+            </div>
+          </div>
+          {phoneChecked && customer && (
+            <div style={{ background: "#edf7f1", border: "1px solid #a8d5b5", borderRadius: 12, padding: 16 }}>
+              <p style={{ fontSize: 15, fontWeight: 800, color: C.green }}>{customer.name}님, 반가워요 👋</p>
+              {customer.daysSince !== null && (
+                <p style={{ fontSize: 13, color: C.sub, marginTop: 4 }}>지난 방문으로부터 {customer.daysSince}일이 됐어요</p>
+              )}
+            </div>
+          )}
+          {phoneChecked && !customer && (
+            <div style={{ background: "#fff0f0", border: "1px solid #f5c0c0", borderRadius: 12, padding: 16 }}>
+              <p style={{ fontSize: 14, color: C.red, fontWeight: 700 }}>등록된 고객 정보가 없어요.</p>
+              <p style={{ fontSize: 13, color: C.sub, marginTop: 4 }}>신규 문진을 작성해주세요.</p>
+            </div>
+          )}
+        </div>
+      ),
+      canNext: phoneChecked && !!customer,
+    },
+    {
+      title: "몸 신호 알아차림", emoji: "🌿", desc: "요즘 두피나 머리카락에서 달라진 게 느껴지나요?",
+      content: (
+        <div style={{ display: "grid", gap: 10 }}>
+          {[
+            { v: "좋아진 느낌이에요", e: "😊" },
+            { v: "비슷한 것 같아요", e: "😐" },
+            { v: "더 신경 쓰여요", e: "😟" },
+            { v: "잘 모르겠어요", e: "🤔" },
+          ].map(({ v, e }) => (
+            <OptionBtn key={v} label={`${e} ${v}`} selected={form.scalp_change === v} onClick={() => set("scalp_change", v)} />
+          ))}
+        </div>
+      ),
+      canNext: !!form.scalp_change,
+    },
+    {
+      title: "생활 변화", emoji: "☀️",
+      content: (
+        <div style={{ display: "grid", gap: 20 }}>
+          <div>
+            <p style={{ fontSize: 14, fontWeight: 700, color: C.text, marginBottom: 10 }}>지난번보다 잠을 잘 자고 있나요?</p>
+            <div style={{ display: "grid", gap: 8 }}>
+              {["잘 자요", "비슷해요", "못 자요"].map(v => (
+                <OptionBtn key={v} label={v} selected={form.sleep_change === v} onClick={() => set("sleep_change", v)} />
+              ))}
+            </div>
+          </div>
+          <div>
+            <p style={{ fontSize: 14, fontWeight: 700, color: C.text, marginBottom: 10 }}>지난번보다 스트레스가 어떤가요?</p>
+            <div style={{ display: "grid", gap: 8 }}>
+              {["줄었어요", "비슷해요", "늘었어요"].map(v => (
+                <OptionBtn key={v} label={v} selected={form.stress_change === v} onClick={() => set("stress_change", v)} />
+              ))}
+            </div>
+          </div>
+        </div>
+      ),
+      canNext: !!form.sleep_change && !!form.stress_change,
+    },
+    {
+      title: "행동 변화", emoji: "✨", desc: "지난번 추천받은 것 중 실천해본 게 있나요?",
+      content: (
+        <div style={{ display: "grid", gap: 10 }}>
+          {[
+            { v: "제품 바꿨어요", e: "🧴" },
+            { v: "생활 습관 바꿨어요", e: "🌿" },
+            { v: "둘 다 했어요", e: "✨" },
+            { v: "못 했어요", e: "😅" },
+          ].map(({ v, e }) => (
+            <OptionBtn key={v} label={`${e} ${v}`} selected={form.action_taken === v} onClick={() => { set("action_taken", v); if (v === "못 했어요") set("action_effect", ""); }} />
+          ))}
+          {form.action_taken && form.action_taken !== "못 했어요" && (
+            <div style={{ marginTop: 8, padding: 16, background: C.goldBg, border: `1px solid ${C.goldLight}`, borderRadius: 12 }}>
+              <p style={{ fontSize: 14, fontWeight: 700, color: C.text, marginBottom: 10 }}>효과가 느껴지셨나요?</p>
+              <div style={{ display: "grid", gap: 8 }}>
+                {["네, 느껴져요", "잘 모르겠어요", "아직 없어요"].map(v => (
+                  <OptionBtn key={v} label={v} selected={form.action_effect === v} onClick={() => set("action_effect", v)} />
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      ),
+      canNext: !!form.action_taken,
+    },
+    {
+      title: "오늘 집중할 부분", emoji: "🔍", desc: "오늘 특별히 봐줬으면 하는 부분이 있나요?",
+      content: (
+        <div style={{ display: "grid", gap: 10 }}>
+          {["두피 가려움", "탈모·볼륨", "두피 트러블", "건조함", "지성·냄새", "모발 손상"].map(v => (
+            <OptionBtn key={v} label={v} selected={form.scalp_concerns.includes(v)} onClick={() => toggleConcern(v)} />
+          ))}
+        </div>
+      ),
+      canNext: form.scalp_concerns.length > 0,
+    },
+  ];
+
+  if (done) {
+    return (
+      <div style={{ minHeight: "100vh", background: C.bg, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+        <div style={{ textAlign: "center", maxWidth: 360 }}>
+          <div style={{ fontSize: 64, marginBottom: 20 }}>💛</div>
+          <h2 style={{ fontSize: 22, fontWeight: 900, marginBottom: 12, color: C.text }}>{customer?.name}님, 문진이 완료됐어요 💛</h2>
+          <p style={{ fontSize: 15, color: C.sub, lineHeight: 1.8 }}>소감이 꼼꼼히 살펴볼게요</p>
+          <div style={{ marginTop: 24, background: C.goldBg, border: `1px solid ${C.goldLight}`, borderRadius: 14, padding: 20 }}>
+            <p style={{ fontSize: 13, color: C.gold, fontWeight: 700 }}>소감</p>
+            <p style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>오늘도 좋은 하루 보내세요 ✦</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const current = steps[step];
+  const progress = (step / steps.length) * 100;
+
+  return (
+    <div style={{ minHeight: "100vh", background: C.bg, fontFamily: "'Noto Sans KR', sans-serif", color: C.text }}>
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700;900&display=swap');* { box-sizing: border-box; margin: 0; padding: 0; }`}</style>
+      <div style={{ background: "#fff", borderBottom: `1px solid ${C.border}`, padding: "16px 24px" }}>
+        <div style={{ maxWidth: 480, margin: "0 auto", display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{ width: 28, height: 28, borderRadius: 8, background: C.gold, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13 }}>✦</div>
+          <div>
+            <p style={{ fontSize: 12, fontWeight: 900, color: C.text }}>소감</p>
+            <p style={{ fontSize: 10, color: C.muted }}>재방문 문진표</p>
+          </div>
+          <span style={{ marginLeft: "auto", fontSize: 12, color: C.muted }}>{step + 1} / {steps.length}</span>
+        </div>
+      </div>
+      <div style={{ height: 3, background: C.border }}>
+        <div style={{ height: "100%", width: `${progress}%`, background: C.gold, transition: "width 0.3s" }} />
+      </div>
+      <div style={{ maxWidth: 480, margin: "0 auto", padding: "32px 24px 100px" }}>
+        <div style={{ marginBottom: 28 }}>
+          <span style={{ fontSize: 36 }}>{current.emoji}</span>
+          <h2 style={{ fontSize: 20, fontWeight: 900, marginTop: 8, marginBottom: 6 }}>{current.title}</h2>
+          {current.desc && <p style={{ fontSize: 14, color: C.sub }}>{current.desc}</p>}
+        </div>
+        {current.content}
+      </div>
+      <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: "#fff", borderTop: `1px solid ${C.border}`, padding: "16px 24px" }}>
+        <div style={{ maxWidth: 480, margin: "0 auto", display: "flex", gap: 10 }}>
+          {step > 0 && (
+            <button onClick={() => setStep(s => s - 1)} style={{ flex: 1, padding: 14, borderRadius: 12, border: `1px solid ${C.border}`, background: "#fff", fontSize: 15, fontFamily: "inherit", cursor: "pointer", color: C.sub }}>← 이전</button>
+          )}
+          {step < steps.length - 1 ? (
+            <button onClick={() => setStep(s => s + 1)} disabled={!current.canNext} style={{ flex: 2, padding: 14, borderRadius: 12, border: "none", background: current.canNext ? C.gold : C.border, color: "#fff", fontSize: 15, fontWeight: 700, fontFamily: "inherit", cursor: current.canNext ? "pointer" : "not-allowed", transition: "all 0.2s" }}>다음 →</button>
+          ) : (
+            <button onClick={submit} disabled={!current.canNext || saving} style={{ flex: 2, padding: 14, borderRadius: 12, border: "none", background: current.canNext ? C.green : C.border, color: "#fff", fontSize: 15, fontWeight: 700, fontFamily: "inherit", cursor: current.canNext ? "pointer" : "not-allowed" }}>{saving ? "저장 중..." : "✓ 제출하기"}</button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function SurveyPage() {
+  const params = new URLSearchParams(window.location.search);
+  if (params.get("type") === "revisit") return <RevisitSurvey />;
+  return <Survey />;
 }
