@@ -301,10 +301,45 @@ export default function Report() {
   const [satSubmitting, setSatSubmitting] = useState(false);
 
   useEffect(() => {
-    const phone = new URLSearchParams(window.location.search).get("phone");
-    if (!phone) { setError("전화번호가 없습니다."); setLoading(false); return; }
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get("token");
+    const phone = params.get("phone");
+
+    if (!token && !phone) { setError("유효하지 않은 리포트 링크입니다."); setLoading(false); return; }
 
     const load = async () => {
+      if (token) {
+        const { data: visit } = await supabase
+          .from("visits")
+          .select("*")
+          .eq("report_token", token)
+          .single();
+
+        if (!visit) { setError("유효하지 않은 리포트 링크입니다."); setLoading(false); return; }
+
+        const { data: customer } = await supabase
+          .from("customers")
+          .select("*")
+          .eq("id", visit.customer_id)
+          .single();
+
+        if (!customer) { setError("고객 정보를 찾을 수 없습니다."); setLoading(false); return; }
+
+        const { data: prevVisits } = await supabase
+          .from("visits")
+          .select("*")
+          .eq("customer_id", customer.id)
+          .lt("id", visit.id)
+          .order("date", { ascending: false })
+          .order("id", { ascending: false })
+          .limit(1);
+
+        setData({ customer, visit, prevVisit: prevVisits?.[0] || null });
+        setLoading(false);
+        return;
+      }
+
+      // phone fallback (하위 호환)
       const { data: customer } = await supabase
         .from("customers")
         .select("*")

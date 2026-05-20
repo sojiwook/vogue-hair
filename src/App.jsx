@@ -490,6 +490,7 @@ function ScalpTab({ customer, onUpdate }) {
       const updatePayload = { scalp_report: reportJson };
       if (avgMoisture !== null) updatePayload.moisture = avgMoisture;
       if (avgElasticity !== null) updatePayload.elasticity = avgElasticity;
+      if (!todayVisit.report_token) updatePayload.report_token = crypto.randomUUID();
       await supabase.from("visits").update(updatePayload).eq("id", todayVisit.id);
       visitId = todayVisit.id;
       savedVisit = { ...todayVisit, ...updatePayload };
@@ -505,6 +506,7 @@ function ScalpTab({ customer, onUpdate }) {
         elasticity: avgElasticity ?? 50,
         score: 51,
         scalp_report: reportJson,
+        report_token: crypto.randomUUID(),
       }).select().single();
       if (visitInsertErr || !newVisit) {
         alert("방문 기록 저장에 실패했습니다. 다시 시도해주세요.");
@@ -762,8 +764,9 @@ function HistoryTab({ customer, onAddVisit, onUpdate }) {
     );
   };
 
-  const openReport = (phone) => {
-    const url = `${window.location.origin}/report?phone=${encodeURIComponent(phone)}`;
+  const openReport = (visit) => {
+    if (!visit?.report_token) return;
+    const url = `${window.location.origin}/report?token=${visit.report_token}`;
     window.open(url, "_blank");
   };
 
@@ -999,20 +1002,22 @@ function HistoryTab({ customer, onAddVisit, onUpdate }) {
                   })()}
                   <CompareSection current={v} prev={reversedVisits[i + 1] || null} />
                   <button
-                    onClick={() => openReport(customer.phone)}
+                    onClick={() => openReport(v)}
+                    disabled={!v.report_token}
                     style={{
                       width: "100%", padding: "11px", borderRadius: 10,
-                      border: `1.5px solid ${C.gold}`,
-                      background: "#fff", color: C.gold,
+                      border: `1.5px solid ${v.report_token ? C.gold : C.muted}`,
+                      background: "#fff", color: v.report_token ? C.gold : C.muted,
                       fontSize: 13, fontWeight: 800, fontFamily: "inherit",
-                      cursor: "pointer", display: "flex", alignItems: "center",
+                      cursor: v.report_token ? "pointer" : "default",
+                      display: "flex", alignItems: "center",
                       justifyContent: "center", gap: 6, transition: "all 0.18s",
                       marginTop: 12,
                     }}
-                    onMouseEnter={e => { e.currentTarget.style.background = C.goldBg; }}
+                    onMouseEnter={e => { if (v.report_token) e.currentTarget.style.background = C.goldBg; }}
                     onMouseLeave={e => { e.currentTarget.style.background = "#fff"; }}
                   >
-                    📋 리포트 확인
+                    {v.report_token ? "📋 리포트 확인" : "📋 리포트 분석 후 링크 생성됩니다"}
                   </button>
                   </div>
                   )}
@@ -1043,7 +1048,8 @@ function KakaoTab({ customer }) {
   const selectedVisit = visits.find(v => String(v.id) === String(selectedVisitId)) ?? null;
 
   const openReport = () => {
-    const url = `${window.location.origin}/report?phone=${encodeURIComponent(customer.phone)}`;
+    if (!selectedVisit?.report_token) return;
+    const url = `${window.location.origin}/report?token=${selectedVisit.report_token}`;
     window.open(url, "_blank");
   };
 
@@ -1053,7 +1059,9 @@ function KakaoTab({ customer }) {
     setSending(true);
     setSendError("");
     setSent(false);
-    const reportUrl = `${window.location.origin}/report?phone=${encodeURIComponent(customer.phone)}`;
+    const reportUrl = selectedVisit.report_token
+      ? `${window.location.origin}/report?token=${selectedVisit.report_token}`
+      : `${window.location.origin}/report?phone=${encodeURIComponent(customer.phone)}`;
     try {
       const res = await fetch("/api/sendAlimtalk", {
         method: "POST",
