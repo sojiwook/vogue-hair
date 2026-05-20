@@ -861,7 +861,6 @@ export default function SurveyPage() {
       <div style={{ marginBottom: 48, textAlign: "center" }}>
         <div style={{ width: 56, height: 56, borderRadius: 16, background: C.gold, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, margin: "0 auto 14px" }}>✦</div>
         <p style={{ fontSize: 20, fontWeight: 900, color: C.text, letterSpacing: 0.5 }}>소감</p>
-        <p style={{ fontSize: 12, color: C.muted, marginTop: 4, letterSpacing: "0.08em" }}>HAIRCARE HEALTH PLATFORM</p>
       </div>
       <div style={{ textAlign: "center", marginBottom: 40 }}>
         <h2 style={{ fontSize: 22, fontWeight: 900, color: C.text, marginBottom: 8 }}>처음 방문이신가요?</h2>
@@ -875,7 +874,6 @@ export default function SurveyPage() {
           <span style={{ fontSize: 26 }}>🌱</span>
           <div style={{ textAlign: "left" }}>
             <div style={{ fontSize: 16, fontWeight: 800 }}>첫 방문이에요</div>
-            <div style={{ fontSize: 12, color: C.sub, marginTop: 2 }}>신규 고객 문진</div>
           </div>
         </button>
         <button
@@ -885,7 +883,6 @@ export default function SurveyPage() {
           <span style={{ fontSize: 26 }}>🔄</span>
           <div style={{ textAlign: "left" }}>
             <div style={{ fontSize: 16, fontWeight: 800 }}>전에 온 적 있어요</div>
-            <div style={{ fontSize: 12, color: C.sub, marginTop: 2 }}>재방문 고객 문진</div>
           </div>
         </button>
       </div>
