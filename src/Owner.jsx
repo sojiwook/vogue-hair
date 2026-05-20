@@ -1,11 +1,9 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { createClient } from "@supabase/supabase-js";
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_KEY;
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
-
-const OWNER_PASSWORD = "vogue2026";
 
 const C = {
   bg: "#f8f6f2", card: "#fff", border: "#ede8e0",
@@ -116,13 +114,21 @@ function CompareCard({ title, count, rate, rateColor, highlighted }) {
   );
 }
 
-function PasswordGate({ onUnlock }) {
-  const [pw, setPw] = useState("");
-  const [err, setErr] = useState(false);
+function LoginGate() {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [err, setErr] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
-  const submit = () => {
-    if (pw === OWNER_PASSWORD) { onUnlock(); }
-    else { setErr(true); setPw(""); }
+  const submit = async () => {
+    if (!email || !password) return;
+    setSubmitting(true);
+    setErr("");
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) {
+      setErr("이메일 또는 비밀번호가 올바르지 않습니다.");
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -130,19 +136,31 @@ function PasswordGate({ onUnlock }) {
       <div style={{ fontSize: 22, fontWeight: 800, color: C.gold, letterSpacing: 1, marginBottom: 4 }}>VOGUE HAIR</div>
       <div style={{ fontSize: 13, color: C.sub, marginBottom: 32 }}>원장님 전용 대시보드</div>
       <Card style={{ width: "100%", maxWidth: 320 }}>
-        <div style={{ fontSize: 14, fontWeight: 600, color: C.text, marginBottom: 12 }}>비밀번호 입력</div>
+        <div style={{ fontSize: 14, fontWeight: 600, color: C.text, marginBottom: 16 }}>로그인</div>
+        <input
+          type="email"
+          value={email}
+          onChange={e => { setEmail(e.target.value); setErr(""); }}
+          onKeyDown={e => e.key === "Enter" && submit()}
+          placeholder="이메일"
+          autoFocus
+          style={{ width: "100%", padding: "11px 12px", borderRadius: 8, border: `1.5px solid ${err ? C.red : C.border}`, fontSize: 15, outline: "none", boxSizing: "border-box", marginBottom: 10, background: C.bg }}
+        />
         <input
           type="password"
-          value={pw}
-          onChange={e => { setPw(e.target.value); setErr(false); }}
+          value={password}
+          onChange={e => { setPassword(e.target.value); setErr(""); }}
           onKeyDown={e => e.key === "Enter" && submit()}
           placeholder="비밀번호"
-          autoFocus
           style={{ width: "100%", padding: "11px 12px", borderRadius: 8, border: `1.5px solid ${err ? C.red : C.border}`, fontSize: 15, outline: "none", boxSizing: "border-box", marginBottom: err ? 6 : 14, background: C.bg }}
         />
-        {err && <div style={{ fontSize: 12, color: C.red, marginBottom: 10 }}>비밀번호가 올바르지 않습니다.</div>}
-        <button onClick={submit} style={{ width: "100%", padding: "12px 0", background: C.gold, color: "#fff", border: "none", borderRadius: 8, fontWeight: 700, fontSize: 15, cursor: "pointer" }}>
-          확인
+        {err && <div style={{ fontSize: 12, color: C.red, marginBottom: 10 }}>{err}</div>}
+        <button
+          onClick={submit}
+          disabled={submitting}
+          style={{ width: "100%", padding: "12px 0", background: submitting ? C.goldLight : C.gold, color: "#fff", border: "none", borderRadius: 8, fontWeight: 700, fontSize: 15, cursor: submitting ? "default" : "pointer" }}
+        >
+          {submitting ? "로그인 중..." : "로그인"}
         </button>
       </Card>
     </div>
@@ -152,13 +170,28 @@ function PasswordGate({ onUnlock }) {
 // ── Main ─────────────────────────────────────────────────
 
 export default function Owner() {
-  const [unlocked, setUnlocked] = useState(false);
+  const [session, setSession] = useState(undefined); // undefined = 확인 중, null = 미로그인, object = 로그인
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState(null);
+  const hasLoadedRef = useRef(false);
 
   useEffect(() => {
-    if (unlocked) loadData();
-  }, [unlocked]);
+    supabase.auth.getSession().then(({ data: { session: s } }) => {
+      setSession(s ?? null);
+    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, s) => {
+      setSession(s ?? null);
+      if (!s) { setData(null); hasLoadedRef.current = false; }
+    });
+    return () => subscription.unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    if (session && !hasLoadedRef.current) {
+      hasLoadedRef.current = true;
+      loadData();
+    }
+  }, [session]);
 
   async function loadData() {
     setLoading(true);
@@ -400,7 +433,12 @@ export default function Owner() {
     }
   }
 
-  if (!unlocked) return <PasswordGate onUnlock={() => setUnlocked(true)} />;
+  if (session === undefined) return (
+    <div style={{ minHeight: "100dvh", background: C.bg, display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <p style={{ color: C.muted, fontSize: 14 }}>로딩 중...</p>
+    </div>
+  );
+  if (!session) return <LoginGate />;
 
   return (
     <div style={{ minHeight: "100dvh", background: C.bg, fontFamily: "'Pretendard', 'Apple SD Gothic Neo', sans-serif" }}>
@@ -410,12 +448,20 @@ export default function Owner() {
           <div style={{ fontSize: 16, fontWeight: 800, color: C.gold, letterSpacing: 0.5 }}>VOGUE HAIR</div>
           <div style={{ fontSize: 11, color: C.muted, marginTop: 1 }}>원장님 대시보드</div>
         </div>
-        <button
-          onClick={() => { window.location.href = "/"; }}
-          style={{ fontSize: 12, color: C.sub, background: "none", border: `1px solid ${C.border}`, borderRadius: 7, padding: "6px 12px", cursor: "pointer" }}
-        >
-          홈으로
-        </button>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button
+            onClick={() => { window.location.href = "/"; }}
+            style={{ fontSize: 12, color: C.sub, background: "none", border: `1px solid ${C.border}`, borderRadius: 7, padding: "6px 12px", cursor: "pointer" }}
+          >
+            홈으로
+          </button>
+          <button
+            onClick={() => supabase.auth.signOut()}
+            style={{ fontSize: 12, color: C.red, background: "none", border: `1px solid ${C.red}`, borderRadius: 7, padding: "6px 12px", cursor: "pointer" }}
+          >
+            로그아웃
+          </button>
+        </div>
       </div>
 
       <div style={{ maxWidth: 640, margin: "0 auto", padding: "16px 14px 48px" }}>
