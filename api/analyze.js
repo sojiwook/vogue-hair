@@ -158,32 +158,56 @@ ${(ci.prevMoisture != null || ci.prevElasticity != null) ? '이전 방문 데이
       text: finalPrompt,
     });
 
-    // 25초 타임아웃 (vercel.json maxDuration: 30 과 맞춤)
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 25000);
+    // 재시도 대상: 429 (rate limit), 529 (overloaded)
+    const RETRYABLE = new Set([429, 529]);
+    const RETRY_DELAYS = [5000, 10000]; // 1차 5초, 2차 10초
 
-    console.log('[analyze] Anthropic API 호출 시작 — model: claude-haiku-4-5-20251001');
+    const anthropicBody = JSON.stringify({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 1500,
+      messages: [{ role: 'user', content }],
+    });
+
     let response;
-    try {
-      response = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': apiKey,
-          'anthropic-version': '2023-06-01',
-        },
-        body: JSON.stringify({
-          model: 'claude-haiku-4-5-20251001',
-          max_tokens: 1500,
-          messages: [{ role: 'user', content }],
-        }),
-        signal: controller.signal,
-      });
-    } finally {
-      clearTimeout(timeoutId);
+    let attempt = 0;
+
+    while (true) {
+      // 각 시도마다 25초 타임아웃 초기화
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 25000);
+
+      console.log(`[analyze] Anthropic API 호출 — attempt ${attempt + 1}/3, model: claude-haiku-4-5-20251001`);
+      try {
+        response = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': apiKey,
+            'anthropic-version': '2023-06-01',
+          },
+          body: anthropicBody,
+          signal: controller.signal,
+        });
+      } finally {
+        clearTimeout(timeoutId);
+      }
+
+      console.log(`[analyze] Anthropic 응답 상태: ${response.status} (attempt ${attempt + 1})`);
+
+      if (!RETRYABLE.has(response.status)) break; // 성공 또는 비재시도 오류
+      if (attempt >= 2) break; // 최대 재시도 소진
+
+      const delay = RETRY_DELAYS[attempt];
+      console.log(`[analyze] ${response.status} 오류 — ${delay / 1000}초 후 재시도 (${attempt + 1}/2)`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+      attempt++;
     }
 
-    console.log('[analyze] Anthropic 응답 상태:', response.status);
+    // 재시도 후에도 429/529면 친화적 메시지 반환
+    if (RETRYABLE.has(response.status)) {
+      console.error(`[analyze] ${response.status} — 2회 재시도 후에도 실패`);
+      return res.status(503).json({ error: '일시적으로 분석이 지연되고 있어요. 잠시 후 다시 시도해주세요.' });
+    }
 
     if (!response.ok) {
       const errText = await response.text();
