@@ -379,7 +379,7 @@ function ScalpTab({ customer, onUpdate }) {
     try {
       const { data: surveyRows } = await supabase
         .from("surveys")
-        .select("scalp_concerns, scalp_type, shampoo_frequency, sleep, stress")
+        .select("scalp_concerns, scalp_type, shampoo_frequency, sleep, stress, scalp_change, action_taken, action_effect, visit_type")
         .eq("phone", customer.phone)
         .order("created_at", { ascending: false })
         .limit(1);
@@ -409,6 +409,10 @@ function ScalpTab({ customer, onUpdate }) {
       shampooFreq: surveyData?.shampoo_frequency || "미기재",
       prevMoisture: prevVisit?.moisture ?? null,
       prevElasticity: prevVisit?.elasticity ?? null,
+      scalp_change: surveyData?.scalp_change ?? null,
+      action_taken: surveyData?.action_taken ?? null,
+      action_effect: surveyData?.action_effect ?? null,
+      visit_type: surveyData?.visit_type ?? null,
     };
 
     try {

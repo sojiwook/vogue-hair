@@ -34,7 +34,12 @@ export default async function handler(req, res) {
 - 샴푸 주기: ${ci.shampooFreq}
 - 이전 방문 수분도: ${prevMoistureStr}
 - 이전 방문 탄력도: ${prevElasticityStr}
-
+${ci.visit_type === "revisit" ? `
+[재방문 정보]
+- 두피 변화 느낌: ${ci.scalp_change}
+- 지난번 추천 실천: ${ci.action_taken}
+- 실천 효과: ${ci.action_effect ?? "미응답"}
+` : ''}
 [작성 원칙]
 - "~습니다", "~입니다" 기반으로, "~어요"를 자연스럽게 혼용
 - "~거든요", "~해보세요" 같은 과도한 친근함 금지
@@ -62,6 +67,9 @@ export default async function handler(req, res) {
   ✅ 머리 감은 후 두피 먼저 말리기
 - 고객이 내일 당장 실천할 수 있는 행동만 권유
 - "~해보세요" 보다 "~하시면 됩니다" 톤으로
+${ci.visit_type === "revisit" ? `- 재방문 고객이므로 지난 방문과의 변화를 반드시 언급
+- action_taken이 "못 했어요"면 부담 없이 격려하는 톤으로
+- action_taken이 실천했으면 구체적인 효과와 연결해서 칭찬하는 톤으로` : ''}
 
 [참고 예시 톤]
 "두피 수분도가 많이 낮아진 상태입니다. 샴푸 후 두피를 완전히 건조하지 않으면 장벽이 더 약해질 수 있어요. 드라이어 찬바람으로 두피를 먼저 말리시면 됩니다."
