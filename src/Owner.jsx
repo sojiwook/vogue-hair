@@ -3,7 +3,9 @@ import { createClient } from "@supabase/supabase-js";
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_KEY;
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
+  auth: { storageKey: "sogam-owner-auth" },
+});
 
 const C = {
   bg: "#f8f6f2", card: "#fff", border: "#ede8e0",
