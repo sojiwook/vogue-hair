@@ -519,6 +519,13 @@ function ScalpTab({ customer, onUpdate }) {
       isNew = true;
     }
 
+    // surveys에 visit_id 연결
+    if (visitId) {
+      try {
+        await supabase.from("surveys").update({ visit_id: visitId }).eq("phone", customer.phone);
+      } catch { /* 조용히 넘어감 */ }
+    }
+
     // Storage 사진 업로드
     if (visitId) {
       const imageUrls = [];

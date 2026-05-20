@@ -260,6 +260,16 @@ function Survey() {
       }).eq("id", todayVisit.id);
     }
 
+    // surveys에 visit_id 연결
+    try {
+      const { data: linkedVisit } = await supabase
+        .from("visits").select("id").eq("customer_id", customerId).eq("date", today).limit(1);
+      const visitId = linkedVisit?.[0]?.id;
+      if (visitId) {
+        await supabase.from("surveys").update({ visit_id: visitId }).eq("phone", form.phone);
+      }
+    } catch { /* 조용히 넘어감 */ }
+
     setSaving(false);
     setDone(true);
   };
@@ -641,6 +651,16 @@ function RevisitSurvey() {
     } else {
       await supabase.from("visits").update(visitData).eq("id", todayVisit.id);
     }
+
+    // surveys에 visit_id 연결
+    try {
+      const { data: linkedVisit } = await supabase
+        .from("visits").select("id").eq("customer_id", customer.id).eq("date", today).limit(1);
+      const visitId = linkedVisit?.[0]?.id;
+      if (visitId) {
+        await supabase.from("surveys").update({ visit_id: visitId }).eq("phone", form.phone);
+      }
+    } catch { /* 조용히 넘어감 */ }
 
     setSaving(false);
     setDone(true);
