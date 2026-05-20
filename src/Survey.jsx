@@ -846,6 +846,49 @@ function RevisitSurvey() {
 
 export default function SurveyPage() {
   const params = new URLSearchParams(window.location.search);
-  if (params.get("type") === "revisit") return <RevisitSurvey />;
-  return <Survey />;
+  const typeParam = params.get("type");
+
+  const [mode, setMode] = useState(
+    typeParam === "revisit" ? "revisit" : typeParam === "new" ? "new" : null
+  );
+
+  if (mode === "revisit") return <RevisitSurvey />;
+  if (mode === "new") return <Survey />;
+
+  return (
+    <div style={{ minHeight: "100vh", background: "#FAF6EC", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 24, fontFamily: "'Noto Sans KR', sans-serif" }}>
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700;900&display=swap');* { box-sizing: border-box; margin: 0; padding: 0; }`}</style>
+      <div style={{ marginBottom: 48, textAlign: "center" }}>
+        <div style={{ width: 56, height: 56, borderRadius: 16, background: C.gold, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, margin: "0 auto 14px" }}>✦</div>
+        <p style={{ fontSize: 20, fontWeight: 900, color: C.text, letterSpacing: 0.5 }}>소감</p>
+        <p style={{ fontSize: 12, color: C.muted, marginTop: 4, letterSpacing: "0.08em" }}>HAIRCARE HEALTH PLATFORM</p>
+      </div>
+      <div style={{ textAlign: "center", marginBottom: 40 }}>
+        <h2 style={{ fontSize: 22, fontWeight: 900, color: C.text, marginBottom: 8 }}>처음 방문이신가요?</h2>
+        <p style={{ fontSize: 14, color: C.sub }}>방문 유형을 선택해주세요</p>
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 14, width: "100%", maxWidth: 360 }}>
+        <button
+          onClick={() => setMode("new")}
+          style={{ width: "100%", padding: "20px 24px", border: `2px solid ${C.gold}`, borderRadius: 16, background: "#fff", color: C.text, fontFamily: "inherit", cursor: "pointer", display: "flex", alignItems: "center", gap: 14, transition: "all 0.18s" }}
+        >
+          <span style={{ fontSize: 26 }}>🌱</span>
+          <div style={{ textAlign: "left" }}>
+            <div style={{ fontSize: 16, fontWeight: 800 }}>첫 방문이에요</div>
+            <div style={{ fontSize: 12, color: C.sub, marginTop: 2 }}>신규 고객 문진</div>
+          </div>
+        </button>
+        <button
+          onClick={() => setMode("revisit")}
+          style={{ width: "100%", padding: "20px 24px", border: `2px solid ${C.gold}`, borderRadius: 16, background: "#fff", color: C.text, fontFamily: "inherit", cursor: "pointer", display: "flex", alignItems: "center", gap: 14, transition: "all 0.18s" }}
+        >
+          <span style={{ fontSize: 26 }}>🔄</span>
+          <div style={{ textAlign: "left" }}>
+            <div style={{ fontSize: 16, fontWeight: 800 }}>전에 온 적 있어요</div>
+            <div style={{ fontSize: 12, color: C.sub, marginTop: 2 }}>재방문 고객 문진</div>
+          </div>
+        </button>
+      </div>
+    </div>
+  );
 }
