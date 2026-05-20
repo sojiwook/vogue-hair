@@ -176,7 +176,7 @@ ${(ci.prevMoisture != null || ci.prevElasticity != null) ? '이전 방문 데이
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 25000);
 
-      console.log(`[analyze] Anthropic API 호출 — attempt ${attempt + 1}/3, model: claude-haiku-4-5-20251001, body: ${anthropicBody.length}chars`);
+      console.log(`[analyze] Anthropic API 호출 — attempt ${attempt + 1}/3, model: claude-haiku-4-5-20251001`);
       try {
         response = await fetch('https://api.anthropic.com/v1/messages', {
           method: 'POST',
@@ -195,12 +195,6 @@ ${(ci.prevMoisture != null || ci.prevElasticity != null) ? '이전 방문 데이
       console.log(`[analyze] Anthropic 응답 상태: ${response.status} (attempt ${attempt + 1})`);
 
       if (!RETRYABLE.has(response.status)) break; // 성공 또는 비재시도 오류
-
-      // 재시도 대상 오류: 응답 바디 로깅
-      try {
-        const retryBody = await response.text();
-        console.error(`[analyze] ${response.status} 응답 바디:`, retryBody.slice(0, 500));
-      } catch {}
 
       if (attempt >= 2) break; // 최대 재시도 소진
 
@@ -229,10 +223,7 @@ ${(ci.prevMoisture != null || ci.prevElasticity != null) ? '이전 방문 데이
 
     const data = await response.json();
     const resultText = data.content?.[0]?.text ?? '';
-    console.log('[analyze] 분석 완료 — 응답 길이:', resultText.length, 'chars',
-      '| stop_reason:', data.stop_reason,
-      '| input_tokens:', data.usage?.input_tokens,
-      '| output_tokens:', data.usage?.output_tokens);
+    console.log('[analyze] 분석 완료 — 응답 길이:', resultText.length, 'chars');
     return res.status(200).json({ result: resultText });
 
   } catch (error) {
