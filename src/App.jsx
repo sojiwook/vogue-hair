@@ -88,7 +88,7 @@ function Spark({ values, color }) {
   return <svg width={w} height={h}><path d={d} fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" /><circle cx={pts[pts.length - 1][0]} cy={pts[pts.length - 1][1]} r={3} fill={color} /></svg>;
 }
 
-function LoginPage({ onLogin }) {
+function LoginPage() {
   const [email, setEmail] = useState("");
   const [pw, setPw] = useState("");
   const [err, setErr] = useState("");
@@ -99,8 +99,8 @@ function LoginPage({ onLogin }) {
     setLoading(true);
     const { error } = await supabase.auth.signInWithPassword({ email, password: pw });
     setLoading(false);
-    if (error) { setErr("이메일 또는 비밀번호가 틀렸습니다."); return; }
-    onLogin();
+    if (error) setErr("이메일 또는 비밀번호가 올바르지 않습니다.");
+    // 로그인 성공 시 onAuthStateChange가 session을 감지해 App이 자동으로 대시보드로 전환
   };
 
   return (
@@ -1338,11 +1338,12 @@ function CustomerDetail({ customer, onBack, onUpdate, onDeleteCustomer }) {
 }
 
 export default function App() {
-  const [loggedIn, setLoggedIn] = useState(false);
+  const [session, setSession] = useState(undefined); // undefined = 확인 중, null = 미로그인, object = 로그인
   const [page, setPage] = useState("list");
   const [customers, setCustomers] = useState([]);
   const [selected, setSelected] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const hasLoadedRef = useRef(false);
 
   const loadData = async () => {
     setLoading(true);
@@ -1355,11 +1356,32 @@ export default function App() {
     setLoading(false);
   };
 
-  useEffect(() => { if (loggedIn) loadData(); }, [loggedIn]);
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session: s } }) => {
+      setSession(s ?? null);
+    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, s) => {
+      setSession(s ?? null);
+      if (!s) { setCustomers([]); setSelected(null); setPage("list"); hasLoadedRef.current = false; }
+    });
+    return () => subscription.unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    if (session && !hasLoadedRef.current) {
+      hasLoadedRef.current = true;
+      loadData();
+    }
+  }, [session]);
 
   const updateCustomer = updated => { setCustomers(prev => prev.map(c => c.id === updated.id ? updated : c)); setSelected(updated); };
 
-  if (!loggedIn) return <LoginPage onLogin={() => setLoggedIn(true)} />;
+  if (session === undefined) return (
+    <div style={{ minHeight: "100vh", background: C.bg, display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <p style={{ color: C.muted, fontSize: 14 }}>로딩 중...</p>
+    </div>
+  );
+  if (!session) return <LoginPage />;
 
   return (
     <div style={{ minHeight: "100vh", background: C.bg, fontFamily: "'Noto Sans KR', 'DM Sans', sans-serif", color: C.text }}>
@@ -1373,7 +1395,7 @@ export default function App() {
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <div style={{ width: 8, height: 8, borderRadius: "50%", background: C.green }} />
             <span style={{ fontSize: 12, color: C.muted }}>DB 연결됨</span>
-            <Btn variant="ghost" size="sm" onClick={() => setLoggedIn(false)}>로그아웃</Btn>
+            <Btn variant="ghost" size="sm" onClick={() => supabase.auth.signOut()}>로그아웃</Btn>
           </div>
         </div>
       </div>
