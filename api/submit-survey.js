@@ -114,18 +114,32 @@ async function handleNewSurvey(req, res, supabase) {
     }).eq('id', existing.id);
     customerId = existing.id;
   } else {
-    const { data: insertedRow, error: insertError } = await supabase
-      .from('customers').insert({
-        name: form.name, phone: form.phone, stylist: form.stylist,
-        gender: form.gender, birth_date: form.birth_date || null,
-        age, marketing_agree: form.marketing_agree,
-        join_date: new Date().toISOString().slice(0, 10), memo: '',
-      }).select('id').single();
-    if (insertError) {
-      console.error('[submit-survey/new] customers insert 오류:', insertError.message);
+    // supabase-js 연결 풀 문제 우회 — raw fetch로 직접 호출
+    const rawRes = await fetch(
+      `${process.env.SUPABASE_URL}/rest/v1/customers?select=id`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': process.env.SUPABASE_SERVICE_KEY,
+          'Authorization': `Bearer ${process.env.SUPABASE_SERVICE_KEY}`,
+          'Prefer': 'return=representation',
+        },
+        body: JSON.stringify({
+          name: form.name, phone: form.phone, stylist: form.stylist,
+          gender: form.gender, birth_date: form.birth_date || null,
+          age, marketing_agree: form.marketing_agree ?? false,
+          join_date: new Date().toISOString().slice(0, 10), memo: '',
+        }),
+      }
+    );
+    if (!rawRes.ok) {
+      const errText = await rawRes.text();
+      console.error('[submit-survey/new] customers insert 오류:', rawRes.status, errText);
       return res.status(500).json({ error: '고객 정보 저장에 실패했습니다' });
     }
-    customerId = insertedRow?.id;
+    const [insertedCustomer] = await rawRes.json();
+    customerId = insertedCustomer?.id;
     if (!customerId) return res.status(500).json({ error: '고객 정보 저장에 실패했습니다' });
   }
 
