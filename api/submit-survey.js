@@ -107,19 +107,20 @@ async function handleNewSurvey(req, res, supabase) {
       age, marketing_agree: form.marketing_agree ?? false,
       join_date: new Date().toISOString().slice(0, 10), memo: '',
     };
-    let insertedRow = null, lastError = null;
+    // INSERT와 SELECT 분리 — .select().single() 조합 제거
+    let insertError = null;
     for (let attempt = 1; attempt <= 3; attempt++) {
-      const { data, error } = await supabase
-        .from('customers').insert(insertPayload).select('id').single();
-      if (!error) { insertedRow = data; break; }
-      lastError = error;
+      const { error } = await supabase.from('customers').insert(insertPayload);
+      if (!error) { insertError = null; break; }
+      insertError = error;
+      console.error(`[customers-insert] 시도 ${attempt}:`, error.message);
       if (attempt < 3) await new Promise(r => setTimeout(r, 500 * attempt));
     }
-    if (lastError) {
-      console.error('[customers-insert]', lastError.message);
-      return res.status(500).json({ error: '고객 정보 저장에 실패했습니다' });
-    }
-    customerId = insertedRow?.id;
+    if (insertError) return res.status(500).json({ error: '고객 정보 저장에 실패했습니다' });
+
+    const { data: inserted } = await supabase
+      .from('customers').select('id').eq('phone', form.phone).limit(1);
+    customerId = inserted?.[0]?.id;
     if (!customerId) return res.status(500).json({ error: '고객 정보 저장에 실패했습니다' });
   }
 
