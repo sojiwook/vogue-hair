@@ -60,8 +60,12 @@ async function handleCheckPhone(req, res, supabase) {
   const { phone } = req.body;
   if (!phone) return res.status(400).json({ error: '전화번호가 필요합니다' });
 
-  const { data: rows } = await supabase
+  const { data: rows, error: phoneErr } = await supabase
     .from('customers').select('id, name, phone').eq('phone', phone).limit(1);
+  if (phoneErr) {
+    console.error('[check-phone] customers SELECT 오류:', phoneErr.message);
+    return res.status(500).json({ error: '고객 조회 중 오류가 발생했습니다' });
+  }
   const found = rows?.[0] ?? null;
   if (!found) return res.status(200).json({ found: false });
 
@@ -108,12 +112,13 @@ async function handleNewSurvey(req, res, supabase) {
       join_date: new Date().toISOString().slice(0, 10), memo: '',
     };
     // INSERT와 SELECT 분리 — .select().single() 조합 제거
+    console.log('[customers-insert] 컬럼:', Object.keys(insertPayload).join(','));
     let insertError = null;
     for (let attempt = 1; attempt <= 3; attempt++) {
       const { error } = await supabase.from('customers').insert(insertPayload);
       if (!error) { insertError = null; break; }
       insertError = error;
-      console.error(`[customers-insert] 시도 ${attempt}:`, error.message);
+      console.error(`[customers-insert] 시도 ${attempt} 오류:`, error.message, '| code:', error.code);
       if (attempt < 3) await new Promise(r => setTimeout(r, 500 * attempt));
     }
     if (insertError) return res.status(500).json({ error: '고객 정보 저장에 실패했습니다' });
