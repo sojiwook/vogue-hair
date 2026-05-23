@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run *)",
+      "Bash(Get-Content \"C:\\\\Users\\\\sojos\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--Users-sojos-vogue-hair\\\\3d415da5-8f2c-453f-a1e9-2584c9a758bc\\\\tasks\\\\bc4ir9f7h.output\" -Wait -Tail 20)",
+      "Bash(Select-Object -First 30)",
+      "Bash(git push *)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git commit *)",
+      "Bash(npx vite *)"
+    ]
+  }
+}
