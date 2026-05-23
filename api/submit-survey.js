@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 
-// 모듈 레벨 싱글톤 - DNS 재조회 없이 연결 재사용
+// 모듈 레벨 싱글톤
+// Connection:close — Node.js 24 undici가 연결을 재사용하다 끊기는 문제 방지
 const supabase = (() => {
   const url = process.env.SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_KEY;
@@ -8,7 +9,9 @@ const supabase = (() => {
     console.error('[submit-survey] SUPABASE 환경변수 미설정');
     return null;
   }
-  return createClient(url, key);
+  return createClient(url, key, {
+    global: { headers: { 'Connection': 'close' } },
+  });
 })();
 
 // 서버는 UTC이므로 KST(+9h) 기준 날짜로 보정
