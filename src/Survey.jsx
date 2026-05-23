@@ -1,5 +1,10 @@
 // Survey.jsx 최종 버전
 import { useState } from "react";
+import { createClient } from "@supabase/supabase-js";
+
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_KEY;
+const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 const STYLISTS = ["이서", "승미", "우기"];
 
@@ -128,23 +133,145 @@ function Survey() {
 
   const submit = async () => {
     setSaving(true);
-    try {
-      const res = await fetch("/api/submit-survey", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type: "new", form }),
+
+    const sleepMap = { "5시간 이하": 30, "5~6시간": 50, "6~7시간": 70, "7시간 이상": 85 };
+    const condMap = { "나쁨": 35, "보통": 55, "좋음": 75 };
+
+    // 1. surveys 저장
+    const { data: existingSurveys, error: surveyQueryErr } = await supabase
+      .from("surveys")
+      .select("id")
+      .eq("phone", form.phone)
+      .order("created_at", { ascending: false })
+      .limit(1);
+    const existingSurvey = existingSurveys?.[0] ?? null;
+
+    if (existingSurvey) {
+      const { error: surveyUpdateErr } = await supabase.from("surveys").update({
+        name: form.name,
+        sleep: form.sleep,
+        stress: form.stress,
+        condition: form.condition,
+        scalp_concerns: form.scalp_concerns,
+        shampoo_frequency: form.shampoo_frequency,
+        scalp_type: form.scalp_type,
+      }).eq("id", existingSurvey.id);
+    } else {
+      const { error: surveyInsertErr } = await supabase.from("surveys").insert({
+        name: form.name,
+        phone: form.phone,
+        sleep: form.sleep,
+        stress: form.stress,
+        condition: form.condition,
+        scalp_concerns: form.scalp_concerns,
+        shampoo_frequency: form.shampoo_frequency,
+        scalp_type: form.scalp_type,
       });
-      const data = await res.json();
-      if (!res.ok) {
-        alert(data.error || "저장에 실패했습니다. 다시 시도해주세요.");
-        return;
-      }
-      setDone(true);
-    } catch {
-      alert("네트워크 오류가 발생했습니다. 다시 시도해주세요.");
-    } finally {
-      setSaving(false);
     }
+
+    // 2. customers 저장
+    const age = calcAge(form.birth_date);
+    const { data: existingCustomers, error: customerQueryErr } = await supabase
+      .from("customers")
+      .select("*")
+      .eq("phone", form.phone)
+      .limit(1);
+    const existing = existingCustomers?.[0] ?? null;
+
+    let customerId;
+    if (existing) {
+      await supabase.from("customers").update({
+        stylist: form.stylist,
+        gender: form.gender,
+        birth_date: form.birth_date || null,
+        age,
+        marketing_agree: form.marketing_agree,
+      }).eq("id", existing.id);
+      customerId = existing.id;
+    } else {
+      const { data: newCustomer, error: customerInsertErr } = await supabase.from("customers").insert({
+        name: form.name,
+        phone: form.phone,
+        stylist: form.stylist,
+        gender: form.gender,
+        birth_date: form.birth_date || null,
+        age,
+        marketing_agree: form.marketing_agree,
+        join_date: new Date().toISOString().slice(0, 10),
+        memo: "",
+      }).select().single();
+      customerId = newCustomer?.id;
+    }
+
+    if (!customerId) {
+      setSaving(false);
+      alert("고객 정보 저장에 실패했습니다. 다시 시도해주세요.");
+      return;
+    }
+
+    // 3. surveys 테이블에서 phone 기준으로 최신 문진 값 재조회 (.single() 제거 — 중복 행 있어도 안전)
+    const { data: surveyRows, error: surveyRowErr } = await supabase
+      .from("surveys")
+      .select("sleep, stress, condition")
+      .eq("phone", form.phone)
+      .order("created_at", { ascending: false })
+      .limit(1);
+    const surveyRow = surveyRows?.[0] ?? null;
+
+    const sleepVal = sleepMap[surveyRow?.sleep] ?? sleepMap[form.sleep] ?? 50;
+    const stressVal = Number(surveyRow?.stress ?? form.stress) * 20;
+    const moistVal = condMap[surveyRow?.condition] ?? condMap[form.condition] ?? 55;
+    const elasticity = 50;
+    const score = Math.round(
+      sleepVal * 0.2 + (100 - stressVal) * 0.2 + moistVal * 0.3 + elasticity * 0.3
+    );
+
+    // 4. visits 생성 또는 업데이트 — 로컬 날짜 사용 (UTC 기준이면 KST 오전 9시 이전에 전날 날짜가 들어가는 버그)
+    const _d = new Date();
+    const today = `${_d.getFullYear()}-${String(_d.getMonth() + 1).padStart(2, '0')}-${String(_d.getDate()).padStart(2, '0')}`;
+    const { data: todayVisits, error: todayVisitsErr } = await supabase
+      .from("visits")
+      .select("id")
+      .eq("customer_id", customerId)
+      .eq("date", today)
+      .limit(1);
+    const todayVisit = todayVisits?.[0] ?? null;
+
+    if (todayVisitsErr) {
+      // visit 조회 오류 시 INSERT 생략 (중복 방지)
+    } else if (!todayVisit) {
+      await supabase.from("visits").insert({
+        customer_id: customerId,
+        date: today,
+        service: "두피 케어",
+        sleep: sleepVal,
+        stress: stressVal,
+        moisture: moistVal,
+        elasticity,
+        score,
+      });
+    } else {
+      await supabase.from("visits").update({
+        sleep: sleepVal,
+        stress: stressVal,
+        moisture: moistVal,
+        elasticity,
+        score,
+      }).eq("id", todayVisit.id);
+    }
+
+    // surveys에 visit_id 연결
+    try {
+      const { data: linkedVisit } = await supabase
+        .from("visits").select("id").eq("customer_id", customerId).eq("date", today).limit(1);
+      const visitId = linkedVisit?.[0]?.id;
+      if (visitId) {
+        await supabase.from("surveys").update({ visit_id: visitId }).eq("phone", form.phone);
+      }
+    } catch { /* 조용히 넘어감 */ }
+
+    setSaving(false);
+    setDone(true);
   };
 
   const steps = [
@@ -445,17 +572,25 @@ function RevisitSurvey() {
     setChecking(true);
     setPhoneChecked(false);
     setCustomer(null);
-    try {
-      const res = await fetch("/api/submit-survey", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type: "check-phone", phone: form.phone }),
-      });
-      const data = await res.json();
-      if (data.found) {
-        setCustomer({ id: data.id, name: data.name, phone: data.phone, lastDate: data.lastDate, daysSince: data.daysSince });
-      }
-    } catch {}
+    const { data: rows } = await supabase
+      .from("customers")
+      .select("id, name, phone")
+      .eq("phone", form.phone)
+      .limit(1);
+    const found = rows?.[0] ?? null;
+    if (found) {
+      const { data: visits } = await supabase
+        .from("visits")
+        .select("date")
+        .eq("customer_id", found.id)
+        .order("date", { ascending: false })
+        .limit(1);
+      const lastDate = visits?.[0]?.date ?? null;
+      const daysSince = lastDate
+        ? Math.floor((new Date() - new Date(lastDate)) / 86400000)
+        : null;
+      setCustomer({ ...found, lastDate, daysSince });
+    }
     setPhoneChecked(true);
     setChecking(false);
   };
@@ -463,27 +598,72 @@ function RevisitSurvey() {
   const submit = async () => {
     if (!customer) return;
     setSaving(true);
-    try {
-      const res = await fetch("/api/submit-survey", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          type: "revisit",
-          form: { ...form, customerName: customer.name },
-          customerId: customer.id,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        alert(data.error || "저장에 실패했습니다. 다시 시도해주세요.");
-        return;
-      }
-      setDone(true);
-    } catch {
-      alert("네트워크 오류가 발생했습니다. 다시 시도해주세요.");
-    } finally {
-      setSaving(false);
+
+    const { data: existingSurveys } = await supabase
+      .from("surveys")
+      .select("id")
+      .eq("phone", form.phone)
+      .order("created_at", { ascending: false })
+      .limit(1);
+    const existingSurvey = existingSurveys?.[0] ?? null;
+
+    const surveyData = {
+      name: customer.name,
+      scalp_change: form.scalp_change,
+      sleep_change: form.sleep_change,
+      stress_change: form.stress_change,
+      action_taken: form.action_taken,
+      action_effect: form.action_effect || null,
+      scalp_concerns: form.scalp_concerns,
+      visit_type: "revisit",
+    };
+
+    if (existingSurvey) {
+      await supabase.from("surveys").update(surveyData).eq("id", existingSurvey.id);
+    } else {
+      await supabase.from("surveys").insert({ ...surveyData, phone: form.phone });
     }
+
+    const sleepMap = { "잘 자요": 85, "비슷해요": 70, "못 자요": 50 };
+    const stressMap = { "줄었어요": 20, "비슷해요": 50, "늘었어요": 80 };
+    const sleepVal = sleepMap[form.sleep_change] ?? 70;
+    const stressVal = stressMap[form.stress_change] ?? 50;
+    const score = Math.round(sleepVal * 0.2 + (100 - stressVal) * 0.2 + 50 * 0.3 + 50 * 0.3);
+
+    const _d = new Date();
+    const today = `${_d.getFullYear()}-${String(_d.getMonth() + 1).padStart(2, '0')}-${String(_d.getDate()).padStart(2, '0')}`;
+    const { data: todayVisits } = await supabase
+      .from("visits")
+      .select("id")
+      .eq("customer_id", customer.id)
+      .eq("date", today)
+      .limit(1);
+    const todayVisit = todayVisits?.[0] ?? null;
+
+    const visitData = { sleep: sleepVal, stress: stressVal, moisture: 50, elasticity: 50, score };
+    if (!todayVisit) {
+      await supabase.from("visits").insert({
+        customer_id: customer.id,
+        date: today,
+        service: "두피 케어",
+        ...visitData,
+      });
+    } else {
+      await supabase.from("visits").update(visitData).eq("id", todayVisit.id);
+    }
+
+    // surveys에 visit_id 연결
+    try {
+      const { data: linkedVisit } = await supabase
+        .from("visits").select("id").eq("customer_id", customer.id).eq("date", today).limit(1);
+      const visitId = linkedVisit?.[0]?.id;
+      if (visitId) {
+        await supabase.from("surveys").update({ visit_id: visitId }).eq("phone", form.phone);
+      }
+    } catch { /* 조용히 넘어감 */ }
+
+    setSaving(false);
+    setDone(true);
   };
 
   const steps = [
