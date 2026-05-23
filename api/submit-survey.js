@@ -111,41 +111,25 @@ async function handleNewSurvey(req, res, supabase) {
     }).eq('id', existing.id);
     customerId = existing.id;
   } else {
-    console.log('[submit-survey/new] customers INSERT 시도');
-    const { error: insertError } = await supabase.from('customers').insert({
-      name: form.name, phone: form.phone, stylist: form.stylist,
-      gender: form.gender, birth_date: form.birth_date || null,
-      age, marketing_agree: form.marketing_agree,
-      join_date: new Date().toISOString().slice(0, 10), memo: '',
-    });
+    const { data: insertedRow, error: insertError } = await supabase
+      .from('customers').insert({
+        name: form.name, phone: form.phone, stylist: form.stylist,
+        gender: form.gender, birth_date: form.birth_date || null,
+        age, marketing_agree: form.marketing_agree,
+        join_date: new Date().toISOString().slice(0, 10), memo: '',
+      }).select('id').single();
     if (insertError) {
-      console.error('[submit-survey/new] customers insert 오류:', {
-        message: insertError.message,
-        code: insertError.code,
-        details: insertError.details,
-        hint: insertError.hint,
-      });
+      console.error('[submit-survey/new] customers insert 오류:', insertError.message);
       return res.status(500).json({ error: '고객 정보 저장에 실패했습니다' });
     }
-    console.log('[submit-survey/new] customers INSERT 성공, ID 조회 중');
-    const { data: inserted } = await supabase
-      .from('customers').select('id').eq('phone', form.phone).limit(1);
-    customerId = inserted?.[0]?.id;
-    if (!customerId) {
-      console.error('[submit-survey/new] customers ID 조회 실패');
-      return res.status(500).json({ error: '고객 정보 저장에 실패했습니다' });
-    }
+    customerId = insertedRow?.id;
+    if (!customerId) return res.status(500).json({ error: '고객 정보 저장에 실패했습니다' });
   }
 
-  // 3. 수치 계산
-  const { data: surveyRows } = await supabase
-    .from('surveys').select('sleep, stress, condition').eq('phone', form.phone)
-    .order('created_at', { ascending: false }).limit(1);
-  const surveyRow = surveyRows?.[0] ?? null;
-
-  const sleepVal   = SLEEP_MAP[surveyRow?.sleep]    ?? SLEEP_MAP[form.sleep]    ?? 50;
-  const stressVal  = Number(surveyRow?.stress       ?? form.stress) * 20;
-  const moistVal   = COND_MAP[surveyRow?.condition] ?? COND_MAP[form.condition] ?? 55;
+  // 3. 수치 계산 (form 값 직접 사용 — DB 재조회 불필요)
+  const sleepVal   = SLEEP_MAP[form.sleep]    ?? 50;
+  const stressVal  = Number(form.stress) * 20;
+  const moistVal   = COND_MAP[form.condition] ?? 55;
   const elasticity = 50;
   const score = Math.round(sleepVal * 0.2 + (100 - stressVal) * 0.2 + moistVal * 0.3 + elasticity * 0.3);
 
@@ -155,25 +139,26 @@ async function handleNewSurvey(req, res, supabase) {
     .from('visits').select('id').eq('customer_id', customerId).eq('date', today).limit(1);
   const todayVisit = todayVisits?.[0] ?? null;
 
+  let visitId = null;
   if (!todayVisitsErr) {
     if (!todayVisit) {
-      await supabase.from('visits').insert({
+      const { data: newVisit } = await supabase.from('visits').insert({
         customer_id: customerId, date: today, service: '두피 케어',
         sleep: sleepVal, stress: stressVal, moisture: moistVal, elasticity, score,
-      });
+      }).select('id').single();
+      visitId = newVisit?.id ?? null;
     } else {
       await supabase.from('visits').update({
         sleep: sleepVal, stress: stressVal, moisture: moistVal, elasticity, score,
       }).eq('id', todayVisit.id);
+      visitId = todayVisit.id;
     }
   }
 
-  // 5. surveys에 visit_id 연결
+  // 5. surveys에 visit_id 연결 (별도 SELECT 없이 visitId 재사용)
   try {
-    const { data: linked } = await supabase
-      .from('visits').select('id').eq('customer_id', customerId).eq('date', today).limit(1);
-    if (linked?.[0]?.id) {
-      await supabase.from('surveys').update({ visit_id: linked[0].id }).eq('phone', form.phone);
+    if (visitId) {
+      await supabase.from('surveys').update({ visit_id: visitId }).eq('phone', form.phone);
     }
   } catch {}
 
