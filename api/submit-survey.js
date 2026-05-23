@@ -1,18 +1,37 @@
 import { createClient } from '@supabase/supabase-js';
 
+// 모듈 초기화 시 URL 트림 저장 — raw fetch와 supabase-js 동일 URL 사용
+const SB_URL = (process.env.SUPABASE_URL || '').trim();
+const SB_KEY = (process.env.SUPABASE_SERVICE_KEY || '').trim();
+
 // 모듈 레벨 싱글톤
-// Connection:close — Node.js 24 undici가 연결을 재사용하다 끊기는 문제 방지
 const supabase = (() => {
-  const url = process.env.SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_KEY;
-  if (!url || !key) {
+  if (!SB_URL || !SB_KEY) {
     console.error('[submit-survey] SUPABASE 환경변수 미설정');
     return null;
   }
-  return createClient(url, key, {
-    global: { headers: { 'Connection': 'close' } },
-  });
+  return createClient(SB_URL, SB_KEY);
 })();
+
+// DNS 재시도 포함 fetch — Lambda DNS TTL 만료 대응
+const sbFetch = async (path, options = {}) => {
+  const url = `${SB_URL}/rest/v1/${path}`;
+  const headers = {
+    'Content-Type': 'application/json',
+    'apikey': SB_KEY,
+    'Authorization': `Bearer ${SB_KEY}`,
+    ...options.headers,
+  };
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const res = await fetch(url, { ...options, headers });
+      return res;
+    } catch (err) {
+      if (attempt === 3) throw err;
+      await new Promise(r => setTimeout(r, 400 * attempt));
+    }
+  }
+};
 
 // 서버는 UTC이므로 KST(+9h) 기준 날짜로 보정
 const getKSTDate = () => {
@@ -114,37 +133,27 @@ async function handleNewSurvey(req, res, supabase) {
     }).eq('id', existing.id);
     customerId = existing.id;
   } else {
-    // raw fetch로 직접 호출
-    let rawRes;
+    let insertRes;
     try {
-      rawRes = await fetch(
-        `${process.env.SUPABASE_URL}/rest/v1/customers?select=id`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'apikey': process.env.SUPABASE_SERVICE_KEY,
-            'Authorization': `Bearer ${process.env.SUPABASE_SERVICE_KEY}`,
-            'Prefer': 'return=representation',
-          },
-          body: JSON.stringify({
-            name: form.name, phone: form.phone, stylist: form.stylist,
-            gender: form.gender, birth_date: form.birth_date || null,
-            age, marketing_agree: form.marketing_agree ?? false,
-            join_date: new Date().toISOString().slice(0, 10), memo: '',
-          }),
-        }
-      );
-    } catch (fetchErr) {
-      console.error('[raw-fetch-fail] message:', fetchErr.message, '| cause:', String(fetchErr.cause));
+      insertRes = await sbFetch('customers?select=id', {
+        method: 'POST',
+        headers: { 'Prefer': 'return=representation' },
+        body: JSON.stringify({
+          name: form.name, phone: form.phone, stylist: form.stylist,
+          gender: form.gender, birth_date: form.birth_date || null,
+          age, marketing_agree: form.marketing_agree ?? false,
+          join_date: new Date().toISOString().slice(0, 10), memo: '',
+        }),
+      });
+    } catch (err) {
+      console.error('[customers-insert] 네트워크 실패:', err.message);
       return res.status(500).json({ error: '고객 정보 저장에 실패했습니다' });
     }
-    if (!rawRes.ok) {
-      const errText = await rawRes.text();
-      console.error('[raw-fetch-http] status:', rawRes.status, '| body:', errText);
+    if (!insertRes.ok) {
+      console.error('[customers-insert] HTTP 오류:', insertRes.status, await insertRes.text());
       return res.status(500).json({ error: '고객 정보 저장에 실패했습니다' });
     }
-    const [insertedCustomer] = await rawRes.json();
+    const [insertedCustomer] = await insertRes.json();
     customerId = insertedCustomer?.id;
     if (!customerId) return res.status(500).json({ error: '고객 정보 저장에 실패했습니다' });
   }
