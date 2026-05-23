@@ -1,11 +1,15 @@
 import { createClient } from '@supabase/supabase-js';
 
-const getSupabase = () => {
+// 모듈 레벨 싱글톤 - DNS 재조회 없이 연결 재사용
+const supabase = (() => {
   const url = process.env.SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_KEY;
-  if (!url || !key) throw new Error('SUPABASE 환경변수 미설정');
+  if (!url || !key) {
+    console.error('[submit-survey] SUPABASE 환경변수 미설정');
+    return null;
+  }
   return createClient(url, key);
-};
+})();
 
 // 서버는 UTC이므로 KST(+9h) 기준 날짜로 보정
 const getKSTDate = () => {
@@ -30,16 +34,7 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: '허용되지 않는 메서드입니다' });
 
-  // 환경변수 세팅 확인 (값은 로그에 남기지 않음)
-  console.log('[submit-survey] env: URL =', process.env.SUPABASE_URL ? 'SET' : 'MISSING', '| SERVICE_KEY =', process.env.SUPABASE_SERVICE_KEY ? 'SET' : 'MISSING');
-
-  let supabase;
-  try {
-    supabase = getSupabase();
-  } catch (e) {
-    console.error('[submit-survey] 환경변수 오류:', e.message);
-    return res.status(500).json({ error: '서버 설정 오류입니다' });
-  }
+  if (!supabase) return res.status(500).json({ error: '서버 설정 오류입니다' });
 
   const { type } = req.body;
   try {
