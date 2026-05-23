@@ -102,24 +102,7 @@ async function handleNewSurvey(req, res, supabase) {
   const SLEEP_MAP = { '5시간 이하': 30, '5~6시간': 50, '6~7시간': 70, '7시간 이상': 85 };
   const COND_MAP  = { '나쁨': 35, '보통': 55, '좋음': 75 };
 
-  // 1. surveys upsert
-  const { data: existingSurveys } = await supabase
-    .from('surveys').select('id').eq('phone', form.phone)
-    .order('created_at', { ascending: false }).limit(1);
-  const existingSurvey = existingSurveys?.[0] ?? null;
-
-  const surveyPayload = {
-    name: form.name, sleep: form.sleep, stress: form.stress,
-    condition: form.condition, scalp_concerns: form.scalp_concerns,
-    shampoo_frequency: form.shampoo_frequency, scalp_type: form.scalp_type,
-  };
-  if (existingSurvey) {
-    await supabase.from('surveys').update(surveyPayload).eq('id', existingSurvey.id);
-  } else {
-    await supabase.from('surveys').insert({ ...surveyPayload, phone: form.phone });
-  }
-
-  // 2. customers upsert
+  // 1. customers upsert — DNS 신선할 때 먼저 처리
   const age = calcAge(form.birth_date);
   const { data: existingCustomers } = await supabase
     .from('customers').select('id').eq('phone', form.phone).limit(1);
@@ -156,6 +139,23 @@ async function handleNewSurvey(req, res, supabase) {
     const [insertedCustomer] = await insertRes.json();
     customerId = insertedCustomer?.id;
     if (!customerId) return res.status(500).json({ error: '고객 정보 저장에 실패했습니다' });
+  }
+
+  // 2. surveys upsert
+  const { data: existingSurveys } = await supabase
+    .from('surveys').select('id').eq('phone', form.phone)
+    .order('created_at', { ascending: false }).limit(1);
+  const existingSurvey = existingSurveys?.[0] ?? null;
+
+  const surveyPayload = {
+    name: form.name, sleep: form.sleep, stress: form.stress,
+    condition: form.condition, scalp_concerns: form.scalp_concerns,
+    shampoo_frequency: form.shampoo_frequency, scalp_type: form.scalp_type,
+  };
+  if (existingSurvey) {
+    await supabase.from('surveys').update(surveyPayload).eq('id', existingSurvey.id);
+  } else {
+    await supabase.from('surveys').insert({ ...surveyPayload, phone: form.phone });
   }
 
   // 3. 수치 계산 (form 값 직접 사용 — DB 재조회 불필요)
