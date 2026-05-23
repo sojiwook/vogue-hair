@@ -30,6 +30,9 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: '허용되지 않는 메서드입니다' });
 
+  // 환경변수 세팅 확인 (값은 로그에 남기지 않음)
+  console.log('[submit-survey] env: URL =', process.env.SUPABASE_URL ? 'SET' : 'MISSING', '| SERVICE_KEY =', process.env.SUPABASE_SERVICE_KEY ? 'SET' : 'MISSING');
+
   let supabase;
   try {
     supabase = getSupabase();
@@ -113,17 +116,30 @@ async function handleNewSurvey(req, res, supabase) {
     }).eq('id', existing.id);
     customerId = existing.id;
   } else {
-    const { data: newCustomer, error } = await supabase.from('customers').insert({
+    console.log('[submit-survey/new] customers INSERT 시도');
+    const { error: insertError } = await supabase.from('customers').insert({
       name: form.name, phone: form.phone, stylist: form.stylist,
       gender: form.gender, birth_date: form.birth_date || null,
       age, marketing_agree: form.marketing_agree,
       join_date: new Date().toISOString().slice(0, 10), memo: '',
-    }).select('id').single();
-    if (error || !newCustomer) {
-      console.error('[submit-survey/new] customers insert 오류:', error?.message);
+    });
+    if (insertError) {
+      console.error('[submit-survey/new] customers insert 오류:', {
+        message: insertError.message,
+        code: insertError.code,
+        details: insertError.details,
+        hint: insertError.hint,
+      });
       return res.status(500).json({ error: '고객 정보 저장에 실패했습니다' });
     }
-    customerId = newCustomer.id;
+    console.log('[submit-survey/new] customers INSERT 성공, ID 조회 중');
+    const { data: inserted } = await supabase
+      .from('customers').select('id').eq('phone', form.phone).limit(1);
+    customerId = inserted?.[0]?.id;
+    if (!customerId) {
+      console.error('[submit-survey/new] customers ID 조회 실패');
+      return res.status(500).json({ error: '고객 정보 저장에 실패했습니다' });
+    }
   }
 
   // 3. 수치 계산
