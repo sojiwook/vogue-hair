@@ -1237,11 +1237,107 @@ function KakaoTab({ customer }) {
   );
 }
 
+function ReportOfferModal({ customer, onClose }) {
+  const visits = Array.isArray(customer.visits) ? customer.visits : [];
+  const latestVisit = visits[visits.length - 1] ?? null;
+
+  const autoAgeGroup = () => {
+    const birthYear = customer.birth_date ? parseInt(customer.birth_date.split("-")[0]) : null;
+    const age = birthYear ? new Date().getFullYear() - birthYear : (customer.age || null);
+    if (!age) return "";
+    if (age < 20) return "10대";
+    if (age < 30) return "20대";
+    if (age < 40) return "30대";
+    if (age < 50) return "40대";
+    if (age < 60) return "50대";
+    return "60대+";
+  };
+
+  const [accepted, setAccepted] = useState(null);
+  const [hairLoss, setHairLoss] = useState(false);
+  const [ageGroup, setAgeGroup] = useState(autoAgeGroup);
+  const [notes, setNotes] = useState("");
+  const [price, setPrice] = useState(10000);
+  const [saving, setSaving] = useState(false);
+
+  const save = async () => {
+    if (accepted === null) return alert("수락 또는 거절을 선택해주세요.");
+    setSaving(true);
+    const { data: { session } } = await supabase.auth.getSession();
+    const { error } = await supabase.from("report_offers").insert({
+      customer_id: customer.id,
+      visit_id: latestVisit?.id ?? null,
+      accepted,
+      hair_loss_concern: hairLoss,
+      age_group: ageGroup || null,
+      offered_by: session?.user?.email ?? null,
+      notes: notes.trim() || null,
+      price,
+    });
+    setSaving(false);
+    if (error) { alert("저장 실패: " + error.message); return; }
+    alert("✅ 제안 기록이 저장됐습니다!");
+    onClose();
+  };
+
+  return (
+    <div
+      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 1000, display: "flex", alignItems: "flex-end", justifyContent: "center" }}
+      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div style={{ background: "#fff", borderRadius: "20px 20px 0 0", padding: "28px 24px 40px", maxWidth: 480, width: "100%", maxHeight: "90vh", overflowY: "auto" }}>
+        <div style={{ background: C.goldBg, border: `1px solid ${C.goldLight}`, borderRadius: 12, padding: "12px 16px", marginBottom: 20 }}>
+          <p style={{ fontSize: 11, color: C.gold, fontWeight: 800, marginBottom: 4 }}>📋 제안 멘트(통일)</p>
+          <p style={{ fontSize: 13, color: C.text, lineHeight: 1.7 }}>
+            "두피 상태를 AI로 분석한 정밀 리포트를 카카오톡으로 보내드려요. 1만원인데, 받아보시겠어요?"
+          </p>
+        </div>
+        <h3 style={{ fontSize: 16, fontWeight: 900, marginBottom: 4 }}>리포트 제안 기록</h3>
+        <p style={{ fontSize: 13, color: C.muted, marginBottom: 20 }}>{customer.name} · {latestVisit?.date ?? "방문 미선택"}</p>
+        <p style={{ fontSize: 12, color: C.sub, fontWeight: 700, marginBottom: 10 }}>결과 *</p>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 20 }}>
+          <button onClick={() => setAccepted(true)} style={{ padding: "22px 12px", borderRadius: 14, fontSize: 17, fontWeight: 900, border: `2.5px solid ${accepted === true ? C.green : C.border}`, background: accepted === true ? "#edf7f1" : "#fff", color: accepted === true ? C.green : C.muted, cursor: "pointer", fontFamily: "inherit", transition: "all 0.18s" }}>✅ 수락</button>
+          <button onClick={() => setAccepted(false)} style={{ padding: "22px 12px", borderRadius: 14, fontSize: 17, fontWeight: 900, border: `2.5px solid ${accepted === false ? C.red : C.border}`, background: accepted === false ? "#fff0f0" : "#fff", color: accepted === false ? C.red : C.muted, cursor: "pointer", fontFamily: "inherit", transition: "all 0.18s" }}>❌ 거절</button>
+        </div>
+        <div onClick={() => setHairLoss(p => !p)} style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 16px", border: `1.5px solid ${hairLoss ? C.gold : C.border}`, borderRadius: 12, background: hairLoss ? C.goldBg : "#fff", cursor: "pointer", marginBottom: 16, transition: "all 0.18s" }}>
+          <div style={{ width: 22, height: 22, borderRadius: 6, border: `2px solid ${hairLoss ? C.gold : C.border}`, background: hairLoss ? C.gold : "#fff", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, transition: "all 0.18s" }}>
+            {hairLoss && <span style={{ color: "#fff", fontSize: 13, fontWeight: 900 }}>✓</span>}
+          </div>
+          <span style={{ fontSize: 14, fontWeight: 700, color: hairLoss ? C.gold : C.text }}>탈모 걱정 / 탈모 진행 중</span>
+        </div>
+        <div style={{ marginBottom: 16 }}>
+          <label style={{ fontSize: 12, color: C.sub, display: "block", marginBottom: 5, fontWeight: 600 }}>연령대</label>
+          <select value={ageGroup} onChange={e => setAgeGroup(e.target.value)} style={{ width: "100%", padding: "10px 14px", border: `1px solid ${C.border}`, borderRadius: 9, fontSize: 13, fontFamily: "inherit", outline: "none", background: "#fff" }}>
+            <option value="">— 선택 (선택사항)</option>
+            {["10대","20대","30대","40대","50대","60대+"].map(g => <option key={g} value={g}>{g}</option>)}
+          </select>
+        </div>
+        <div style={{ marginBottom: 16 }}>
+          <label style={{ fontSize: 12, color: C.sub, display: "block", marginBottom: 5, fontWeight: 600 }}>제안 가격 (기본 1만원)</label>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <input type="number" value={price} onChange={e => setPrice(Number(e.target.value))} step={1000} style={{ flex: 1, padding: "10px 14px", border: `1px solid ${C.border}`, borderRadius: 9, fontSize: 13, fontFamily: "inherit", outline: "none" }} />
+            <span style={{ fontSize: 13, color: C.muted }}>원</span>
+          </div>
+        </div>
+        <div style={{ marginBottom: 24 }}>
+          <label style={{ fontSize: 12, color: C.sub, display: "block", marginBottom: 5, fontWeight: 600 }}>메모 (선택)</label>
+          <textarea value={notes} onChange={e => setNotes(e.target.value)} placeholder="거절 이유, 반응, 특이사항..." style={{ width: "100%", height: 70, padding: "10px 14px", border: `1px solid ${C.border}`, borderRadius: 9, fontSize: 13, fontFamily: "inherit", resize: "none", outline: "none", boxSizing: "border-box" }} />
+        </div>
+        <div style={{ display: "flex", gap: 10 }}>
+          <Btn variant="ghost" onClick={onClose} style={{ flex: 1 }}>취소</Btn>
+          <Btn variant="gold" onClick={save} disabled={saving || accepted === null} style={{ flex: 2 }}>{saving ? "저장 중..." : "✓ 기록 저장"}</Btn>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function CustomerDetail({ customer, onBack, onUpdate, onDeleteCustomer }) {
   const [tab, setTab] = useState("scalp");
   const [editingProfile, setEditingProfile] = useState(false);
   const [profileForm, setProfileForm] = useState({});
   const [savingProfile, setSavingProfile] = useState(false);
+  const [showOfferModal, setShowOfferModal] = useState(false);
   const TABS = [{ id: "scalp", label: "🔬 두피 분석" }, { id: "history", label: "📅 방문 히스토리" }, { id: "kakao", label: "💬 카카오 발송" }];
   const visits = Array.isArray(customer.visits) ? customer.visits : [];
   const latest = visits[visits.length - 1];
@@ -1292,6 +1388,7 @@ function CustomerDetail({ customer, onBack, onUpdate, onDeleteCustomer }) {
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
         <Btn variant="ghost" size="sm" onClick={onBack}>← 목록</Btn>
         <Btn variant="ghost" size="sm" onClick={deleteCustomer} style={{ color: "#d94f4f", borderColor: "#d94f4f" }}>🗑 삭제</Btn>
+        <Btn variant="outline" size="sm" onClick={() => setShowOfferModal(true)}>💰 제안 기록</Btn>
         <div style={{ flex: 1 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
             <h2 style={{ fontSize: 20, fontWeight: 900 }}>{customer.name}</h2>
@@ -1342,6 +1439,7 @@ function CustomerDetail({ customer, onBack, onUpdate, onDeleteCustomer }) {
       <div style={{ display: tab === "scalp" ? "block" : "none" }}><ScalpTab customer={customer} onUpdate={onUpdate} /></div>
       <div style={{ display: tab === "history" ? "block" : "none" }}><HistoryTab customer={customer} onAddVisit={v => onUpdate({ ...customer, visits: [...visits, v] })} onUpdate={onUpdate} /></div>
       <div style={{ display: tab === "kakao" ? "block" : "none" }}><KakaoTab customer={customer} /></div>
+      {showOfferModal && <ReportOfferModal customer={customer} onClose={() => setShowOfferModal(false)} />}
     </div>
   );
 }

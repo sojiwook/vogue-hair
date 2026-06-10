@@ -169,6 +169,89 @@ function LoginGate() {
   );
 }
 
+function H3Card({ h3 }) {
+  const { total, accepted, takeRate, hairLoss, nonHairLoss, verdict, recentOffers } = h3;
+  const verdictConfig = {
+    pass: { text: "통과: 독립 상품 가치 확인", bg: "#edf7f1", border: "#a8d5b5", color: "#3a8c5c" },
+    gray: { text: "회색지대: 표본 확대 필요", bg: "#fff8e6", border: "#f5d682", color: "#b07800" },
+    fail: { text: "기각: 재포지셔닝 검토", bg: "#fff0f0", border: "#f5c0c0", color: "#d94f4f" },
+  };
+  const vd = verdictConfig[verdict];
+
+  return (
+    <Card>
+      <SectionHeader question="💰 H3: 리포트 지불 실험" subtitle="1만원 지불 의향 측정 — 거절도 데이터" />
+
+      <div style={{ marginBottom: 16 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+          <span style={{ fontSize: 13, fontWeight: 700, color: C.text }}>진행률</span>
+          <span style={{ fontSize: 13, fontWeight: 800, color: C.gold }}>{total} / 30건</span>
+        </div>
+        <div style={{ height: 10, background: "#eee8df", borderRadius: 99, overflow: "hidden" }}>
+          <div style={{ width: `${Math.min(100, Math.round((total / 30) * 100))}%`, height: "100%", background: C.gold, borderRadius: 99, transition: "width 0.5s ease" }} />
+        </div>
+        <p style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>판정 최소 표본: 30건</p>
+      </div>
+
+      <div style={{ display: "flex", alignItems: "center", gap: 14, background: C.bg, borderRadius: 12, padding: "14px 18px", marginBottom: 14 }}>
+        <div style={{ fontSize: 36, fontWeight: 900, color: total > 0 ? C.gold : C.muted, lineHeight: 1 }}>
+          {total > 0 ? `${takeRate}%` : "—"}
+        </div>
+        <div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>전체 take rate</div>
+          <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>{accepted}건 수락 / {total}건 제안</div>
+        </div>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14 }}>
+        <div style={{ background: hairLoss.total > 0 ? "#fff8e6" : C.bg, border: `1.5px solid ${hairLoss.total > 0 ? C.goldLight : C.border}`, borderRadius: 12, padding: "14px 14px 12px" }}>
+          <div style={{ fontSize: 11, color: C.sub, marginBottom: 8 }}>🔴 탈모 고민 고객</div>
+          <div style={{ fontSize: 26, fontWeight: 900, color: C.gold, lineHeight: 1 }}>{hairLoss.total > 0 ? `${hairLoss.rate}%` : "—"}</div>
+          <div style={{ fontSize: 10, color: C.muted, marginTop: 3 }}>take rate</div>
+          <div style={{ marginTop: 8, paddingTop: 8, borderTop: `1px solid ${C.border}`, fontSize: 11, color: C.sub }}>{hairLoss.accepted}건 수락 / {hairLoss.total}건</div>
+        </div>
+        <div style={{ background: C.bg, border: `1.5px solid ${C.border}`, borderRadius: 12, padding: "14px 14px 12px" }}>
+          <div style={{ fontSize: 11, color: C.sub, marginBottom: 8 }}>비탈모 고객</div>
+          <div style={{ fontSize: 26, fontWeight: 900, color: C.blue, lineHeight: 1 }}>{nonHairLoss.total > 0 ? `${nonHairLoss.rate}%` : "—"}</div>
+          <div style={{ fontSize: 10, color: C.muted, marginTop: 3 }}>take rate</div>
+          <div style={{ marginTop: 8, paddingTop: 8, borderTop: `1px solid ${C.border}`, fontSize: 11, color: C.sub }}>{nonHairLoss.accepted}건 수락 / {nonHairLoss.total}건</div>
+        </div>
+      </div>
+
+      {verdict === "pending" ? (
+        <div style={{ background: C.bg, borderRadius: 10, padding: "12px 16px", marginBottom: 14, textAlign: "center" }}>
+          <span style={{ fontSize: 13, color: C.muted }}>⏳ 판정 대기 ({total}/30)</span>
+        </div>
+      ) : (
+        <div style={{ background: vd.bg, border: `1px solid ${vd.border}`, borderRadius: 10, padding: "12px 16px", marginBottom: 14, textAlign: "center" }}>
+          <span style={{ fontSize: 13, fontWeight: 800, color: vd.color }}>{vd.text}</span>
+        </div>
+      )}
+
+      {recentOffers.length > 0 ? (
+        <>
+          <div style={{ fontSize: 12, fontWeight: 600, color: C.sub, marginBottom: 8 }}>최근 제안 내역</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {recentOffers.map(o => (
+              <div key={o.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", background: o.accepted ? "#edf7f1" : "#fff0f0", borderRadius: 9 }}>
+                <span style={{ fontSize: 14, flexShrink: 0 }}>{o.accepted ? "✅" : "❌"}</span>
+                <span style={{ fontSize: 12, fontWeight: 700, color: C.text, flex: 1 }}>{o.customerName}</span>
+                {o.hair_loss_concern && <span style={{ fontSize: 10, background: "#fff8e6", border: `1px solid ${C.goldLight}`, color: C.gold, padding: "2px 7px", borderRadius: 99, fontWeight: 700, flexShrink: 0 }}>탈모</span>}
+                <span style={{ fontSize: 11, color: C.muted, flexShrink: 0 }}>{o.offered_at ? new Date(o.offered_at).toLocaleDateString("ko-KR", { month: "numeric", day: "numeric" }) : "—"}</span>
+                {o.offered_by && <span style={{ fontSize: 10, color: C.muted, flexShrink: 0 }}>{o.offered_by.split("@")[0]}</span>}
+              </div>
+            ))}
+          </div>
+        </>
+      ) : (
+        <div style={{ textAlign: "center", padding: "20px 0", color: C.muted, fontSize: 13 }}>
+          아직 제안 기록이 없습니다. 스타일리스트 화면에서 기록해주세요.
+        </div>
+      )}
+    </Card>
+  );
+}
+
 // ── Main ─────────────────────────────────────────────────
 
 export default function Owner() {
@@ -198,11 +281,12 @@ export default function Owner() {
   async function loadData() {
     setLoading(true);
     try {
-      const [customersRes, visitsRes, surveysRes, satisfactionsRes] = await Promise.all([
-        supabase.from("customers").select("id,phone,gender,birth_date,age,stylist,created_at,is_test"),
+      const [customersRes, visitsRes, surveysRes, satisfactionsRes, offersRes] = await Promise.all([
+        supabase.from("customers").select("id,name,phone,gender,birth_date,age,stylist,created_at,is_test"),
         supabase.from("visits").select("id,customer_id,date,moisture,elasticity,kakao_message"),
         supabase.from("surveys").select("id,phone,scalp_concerns,scalp_type"),
         supabase.from("satisfaction").select("id,visit_id,q1_report_helpful,q2_home_care,q3_revisit_intention"),
+        supabase.from("report_offers").select("id,customer_id,offered_at,price,accepted,hair_loss_concern,age_group,offered_by,created_at").order("offered_at", { ascending: false }),
       ]);
 
       const allCustomers     = customersRes.data     || [];
@@ -419,6 +503,33 @@ export default function Owner() {
         insights.push(`전체 고객 평균 두피 점수는 ${avgScore}점입니다.`);
       }
 
+      // ── H3 지불 실험 ─────────────────────────────────────
+      const allOffers = offersRes.data || [];
+      const offers = allOffers.filter(o => !testIds.has(o.customer_id));
+
+      const h3Total = offers.length;
+      const h3Accepted = offers.filter(o => o.accepted).length;
+      const h3TakeRate = h3Total > 0 ? Math.round((h3Accepted / h3Total) * 100) : 0;
+
+      const hlOffers = offers.filter(o => o.hair_loss_concern);
+      const nhlOffers = offers.filter(o => !o.hair_loss_concern);
+      const hlTotal = hlOffers.length;
+      const hlAccepted = hlOffers.filter(o => o.accepted).length;
+      const hlRate = hlTotal > 0 ? Math.round((hlAccepted / hlTotal) * 100) : 0;
+      const nhlTotal = nhlOffers.length;
+      const nhlAccepted = nhlOffers.filter(o => o.accepted).length;
+      const nhlRate = nhlTotal > 0 ? Math.round((nhlAccepted / nhlTotal) * 100) : 0;
+
+      let h3Verdict;
+      if (h3Total < 30) h3Verdict = "pending";
+      else if (h3TakeRate >= 20) h3Verdict = "pass";
+      else if (h3TakeRate >= 10) h3Verdict = "gray";
+      else h3Verdict = "fail";
+
+      const cidToName = {};
+      allCustomers.forEach(c => { if (c.id && c.name) cidToName[c.id] = c.name; });
+      const recentOffers = offers.slice(0, 10).map(o => ({ ...o, customerName: cidToName[o.customer_id] || "—" }));
+
       setData({
         kpi: { totalCustomers, visitsThisMonth, revisitRate, avgScore, avgMoisture, avgElasticity },
         reportEffect: { reportedCount, notReportedCount, reportedRevisitRate, notReportedRevisitRate, avgDaysAfterReport, reportDiff },
@@ -427,6 +538,7 @@ export default function Owner() {
         satisfaction: { avgQ1, q2Dist, revisitIntentRate, total: allSatisfactions.length, q3Total: q3Answered.length },
         insights,
         top5Concerns,
+        h3: { total: h3Total, accepted: h3Accepted, takeRate: h3TakeRate, hairLoss: { total: hlTotal, accepted: hlAccepted, rate: hlRate }, nonHairLoss: { total: nhlTotal, accepted: nhlAccepted, rate: nhlRate }, verdict: h3Verdict, recentOffers },
       });
     } catch (e) {
       console.error("[Owner] 데이터 로드 오류:", e);
@@ -771,6 +883,8 @@ export default function Owner() {
                 </div>
               )}
             </Card>
+
+            <H3Card h3={data.h3} />
 
             <div style={{ textAlign: "center", fontSize: 11, color: C.muted, marginTop: 8, paddingBottom: 8 }}>
               {new Date().toLocaleString("ko-KR")} 기준
