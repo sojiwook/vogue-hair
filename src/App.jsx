@@ -500,12 +500,40 @@ function ScalpTab({ customer, onUpdate }) {
       ? concernsSection[1].split('\n').map(l => l.replace(/^[\s\-·•]+/, '').trim()).filter(l => l.length > 0)
       : [];
 
+    // 부위별 분석 후 제품 추천 합성 (이미지 없는 텍스트 기반 단일 호출)
+    let productSynthText = '';
+    if (avgScoreDetail || avgScalpScore !== null) {
+      try {
+        const { data: latestSurvey } = await supabase
+          .from("surveys")
+          .select("scalp_concerns, scalp_type")
+          .eq("phone", customer.phone)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .single();
+        const synthInfo = {
+          purpose: 'product_synthesis',
+          name: customer.name,
+          concerns: Array.isArray(latestSurvey?.scalp_concerns) && latestSurvey.scalp_concerns.length > 0
+            ? latestSurvey.scalp_concerns.join(', ')
+            : '없음',
+          scalpType: latestSurvey?.scalp_type || '미기재',
+          scoreDetail: avgScoreDetail,
+          scalpScore: avgScalpScore,
+        };
+        await callAI(null, null, null, text => { productSynthText += text; }, null, customer.name, null, synthInfo);
+      } catch { /* 제품 추천 생략 — 리포트는 정상 저장 */ }
+    }
+    const finalAllReportsText = productSynthText
+      ? allReportsText + '\n\n' + productSynthText
+      : allReportsText;
+
     const reportJson = JSON.stringify({
       moisture: avg(moistures),
       elasticity: avg(elasticities),
       scalpType,
       concerns,
-      aiAnalysis: allReportsText,
+      aiAnalysis: finalAllReportsText,
       analyzedAt: new Date().toISOString(),
     });
 
