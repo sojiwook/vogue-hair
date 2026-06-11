@@ -280,8 +280,8 @@ function PhotoPairSection({ currentImages, prevImages, visit, prevVisit }) {
                 : (
                   <div style={{ minHeight: 90, background: C.bg, borderRadius: 8, border: `1.5px dashed ${C.border}`, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4, padding: 12 }}>
                     <span style={{ fontSize: 18 }}>📷</span>
-                    <p style={{ fontSize: 11, color: C.text, fontWeight: 700, textAlign: "center" }}>이번이 첫 기록</p>
-                    <p style={{ fontSize: 10, color: C.muted, textAlign: "center" }}>다음 방문부터<br />비교 가능합니다</p>
+                    <p style={{ fontSize: 11, color: C.text, fontWeight: 700, textAlign: "center" }}>이전 방문 미촬영</p>
+                    <p style={{ fontSize: 10, color: C.muted, textAlign: "center" }}>이 부위는 이번에<br />처음 기록됩니다</p>
                   </div>
                 )
               }
