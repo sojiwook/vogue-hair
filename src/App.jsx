@@ -511,6 +511,10 @@ function ScalpTab({ customer, onUpdate }) {
     const perAreaScores = completedImages
       .filter(im => im.score_detail)
       .map(im => ({ label: im.label, detail: im.score_detail, scalp_score: im.scalp_score }));
+    console.log('[diagnosis] completedImages score_detail 현황:',
+      completedImages.map(im => ({ label: im.label, score_detail: im.score_detail, scalp_score: im.scalp_score })));
+    console.log('[diagnosis] perAreaScores:', perAreaScores);
+    console.log('[diagnosis] avgScoreDetail:', avgScoreDetail);
     if (perAreaScores.length >= 1 && avgScoreDetail) {
       try {
         const diagInfo = {
@@ -520,7 +524,11 @@ function ScalpTab({ customer, onUpdate }) {
           avgScoreDetail,
         };
         await callAI(null, null, null, text => { diagnosisSynthText += text; }, null, customer.name, null, diagInfo);
-      } catch { /* 진단 생략 */ }
+        console.log('[diagnosis] 원문 응답:', diagnosisSynthText);
+        console.log('[diagnosis JSON]', JSON.stringify(diagnosisSynthText));
+      } catch (e) { console.error('[diagnosis] 호출 실패:', e); }
+    } else {
+      console.warn('[diagnosis] 호출 건너뜀 — perAreaScores.length:', perAreaScores.length, '/ avgScoreDetail:', avgScoreDetail);
     }
 
     // 부위별 분석 후 제품 추천 합성 (이미지 없는 텍스트 기반 단일 호출)
@@ -553,7 +561,12 @@ function ScalpTab({ customer, onUpdate }) {
 
     let diagnosisData = null;
     if (diagnosisSynthText) {
-      try { diagnosisData = JSON.parse(diagnosisSynthText.trim()); } catch { }
+      try {
+        diagnosisData = JSON.parse(diagnosisSynthText.trim());
+        console.log('[diagnosis] 파싱 성공:', diagnosisData);
+      } catch (e) {
+        console.error('[diagnosis] JSON 파싱 실패:', e, '원문:', diagnosisSynthText);
+      }
     }
 
     const reportJson = JSON.stringify({

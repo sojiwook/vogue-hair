@@ -539,6 +539,7 @@ export default function Report() {
     catch { return { aiAnalysis: String(raw) }; }
   };
   const scalpParsed = parseScalpReport(visit.scalp_report);
+  console.log('[Report] scalpParsed.diagnosis:', scalpParsed?.diagnosis ?? '없음 (null)');
   const aiRaw = scalpParsed?.aiAnalysis;
   const scalpText = (aiRaw && typeof aiRaw === 'string' && aiRaw.trim())
     ? aiRaw
