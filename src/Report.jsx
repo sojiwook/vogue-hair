@@ -156,7 +156,10 @@ function ScalpDetailMap({ visit }) {
 // ── 3. 변화 추적 ─────────────────────────────────────────────────────────────
 
 function CompareSection({ current, prev }) {
+  const hasScalp = current.scalp_score != null && prev?.scalp_score != null;
+
   const metrics = [
+    ...(hasScalp ? [{ key: "scalp_score", label: "두피",    higherIsBetter: true }] : []),
     { key: "score",      label: "웰니스",   higherIsBetter: true  },
     { key: "moisture",   label: "수분도",   higherIsBetter: true  },
     { key: "elasticity", label: "탄력도",   higherIsBetter: true  },
@@ -174,6 +177,20 @@ function CompareSection({ current, prev }) {
   }
 
   const scoreDiff = current.score - prev.score;
+  const scalpDiff = hasScalp ? Number(current.scalp_score) - Number(prev.scalp_score) : null;
+
+  let verdictText, verdictColor;
+  if (hasScalp && scalpDiff < -5 && scoreDiff >= 0) {
+    verdictText = "두피 하락 중 — 집중 케어 시점 ⚠️";
+    verdictColor = C.red;
+  } else if (scoreDiff === 0 && (scalpDiff == null || scalpDiff === 0)) {
+    verdictText = "변화 없음";
+    verdictColor = C.muted;
+  } else {
+    const improving = (scalpDiff != null ? scalpDiff : 0) + scoreDiff > 0;
+    verdictText = improving ? "전반적으로 개선되고 있어요 👍" : "관리가 필요한 시점이에요 ⚠️";
+    verdictColor = improving ? C.green : C.red;
+  }
 
   return (
     <div style={{ background: C.card, borderRadius: 16, padding: 24, marginBottom: 16, border: `1px solid ${C.border}` }}>
@@ -181,9 +198,12 @@ function CompareSection({ current, prev }) {
         <h3 style={{ fontSize: 15, fontWeight: 800 }}>📈 지난 방문 대비 변화</h3>
         <span style={{ fontSize: 12, color: C.muted }}>기준: {prev.date}</span>
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 8, marginBottom: 16 }}>
+      <div style={{ display: "grid", gridTemplateColumns: `repeat(${metrics.length},1fr)`, gap: 8, marginBottom: 16 }}>
         {metrics.map(m => {
-          const diff = current[m.key] - prev[m.key];
+          const raw = current[m.key];
+          const rawPrev = prev[m.key];
+          if (raw == null || rawPrev == null) return null;
+          const diff = Number(raw) - Number(rawPrev);
           const improved = m.higherIsBetter ? diff > 0 : diff < 0;
           const color = diff === 0 ? C.muted : improved ? C.green : C.red;
           const arrow = diff > 0 ? "▲" : diff < 0 ? "▼" : "─";
@@ -191,14 +211,13 @@ function CompareSection({ current, prev }) {
             <div key={m.key} style={{ textAlign: "center", background: C.bg, borderRadius: 10, padding: "12px 6px" }}>
               <p style={{ fontSize: 10, color: C.muted, marginBottom: 4 }}>{m.label}</p>
               <p style={{ fontSize: 20, fontWeight: 900, color }}>{arrow}{Math.abs(diff)}</p>
-              <p style={{ fontSize: 10, color: C.muted, marginTop: 4 }}>{prev[m.key]} → {current[m.key]}</p>
+              <p style={{ fontSize: 10, color: C.muted, marginTop: 4 }}>{rawPrev} → {raw}</p>
             </div>
           );
         })}
       </div>
-      <p style={{ fontSize: 13, textAlign: "center", fontWeight: 700,
-        color: scoreDiff === 0 ? C.muted : scoreDiff > 0 ? C.green : C.red }}>
-        {scoreDiff === 0 ? "변화 없음" : scoreDiff > 0 ? "개선되고 있어요 👍" : "관리가 필요해요 ⚠️"}
+      <p style={{ fontSize: 13, textAlign: "center", fontWeight: 700, color: verdictColor }}>
+        {verdictText}
       </p>
     </div>
   );
@@ -259,8 +278,10 @@ function PhotoPairSection({ currentImages, prevImages, visit, prevVisit }) {
                 ? <img src={prevMap[k]} alt={`이전 ${AREA_LABELS_MAP[k]}`}
                     style={{ ...imgBase, border: `1px solid ${C.border}` }} />
                 : (
-                  <div style={{ aspectRatio: "1", background: C.bg, borderRadius: 8, border: `1px dashed ${C.border}`, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    <p style={{ fontSize: 9, color: C.muted, textAlign: "center", padding: 4 }}>첫 측정<br />다음 방문부터 비교</p>
+                  <div style={{ minHeight: 90, background: C.bg, borderRadius: 8, border: `1.5px dashed ${C.border}`, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4, padding: 12 }}>
+                    <span style={{ fontSize: 18 }}>📷</span>
+                    <p style={{ fontSize: 11, color: C.text, fontWeight: 700, textAlign: "center" }}>이번이 첫 기록</p>
+                    <p style={{ fontSize: 10, color: C.muted, textAlign: "center" }}>다음 방문부터<br />비교 가능합니다</p>
                   </div>
                 )
               }
