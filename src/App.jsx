@@ -422,6 +422,12 @@ function ScalpTab({ customer, onUpdate }) {
       action_taken: surveyData?.action_taken ?? null,
       action_effect: surveyData?.action_effect ?? null,
       visit_type: surveyData?.visit_type ?? null,
+      prevScoreDetail: (() => {
+        const sd = prevVisit?.score_detail;
+        if (!sd) return null;
+        if (typeof sd === 'object' && !Array.isArray(sd)) return sd;
+        try { return JSON.parse(sd); } catch { return null; }
+      })(),
     };
 
     try {
@@ -500,6 +506,23 @@ function ScalpTab({ customer, onUpdate }) {
       ? concernsSection[1].split('\n').map(l => l.replace(/^[\s\-·•]+/, '').trim()).filter(l => l.length > 0)
       : [];
 
+    // 종합 진단 합성 (부위별 점수 → type_label/pattern/priority JSON)
+    let diagnosisSynthText = '';
+    const perAreaScores = completedImages
+      .filter(im => im.score_detail)
+      .map(im => ({ label: im.label, detail: im.score_detail, scalp_score: im.scalp_score }));
+    if (perAreaScores.length >= 1 && avgScoreDetail) {
+      try {
+        const diagInfo = {
+          purpose: 'diagnosis_synthesis',
+          name: customer.name,
+          perAreaScores,
+          avgScoreDetail,
+        };
+        await callAI(null, null, null, text => { diagnosisSynthText += text; }, null, customer.name, null, diagInfo);
+      } catch { /* 진단 생략 */ }
+    }
+
     // 부위별 분석 후 제품 추천 합성 (이미지 없는 텍스트 기반 단일 호출)
     let productSynthText = '';
     if (avgScoreDetail || avgScalpScore !== null) {
@@ -511,12 +534,12 @@ function ScalpTab({ customer, onUpdate }) {
           .order("created_at", { ascending: false })
           .limit(1)
           .single();
+        const hasIntakeData = Array.isArray(latestSurvey?.scalp_concerns) && latestSurvey.scalp_concerns.length > 0;
         const synthInfo = {
           purpose: 'product_synthesis',
           name: customer.name,
-          concerns: Array.isArray(latestSurvey?.scalp_concerns) && latestSurvey.scalp_concerns.length > 0
-            ? latestSurvey.scalp_concerns.join(', ')
-            : '없음',
+          hasIntakeData,
+          concerns: hasIntakeData ? latestSurvey.scalp_concerns.join(', ') : null,
           scalpType: latestSurvey?.scalp_type || '미기재',
           scoreDetail: avgScoreDetail,
           scalpScore: avgScalpScore,
@@ -528,11 +551,17 @@ function ScalpTab({ customer, onUpdate }) {
       ? allReportsText + '\n\n' + productSynthText
       : allReportsText;
 
+    let diagnosisData = null;
+    if (diagnosisSynthText) {
+      try { diagnosisData = JSON.parse(diagnosisSynthText.trim()); } catch { }
+    }
+
     const reportJson = JSON.stringify({
       moisture: avg(moistures),
       elasticity: avg(elasticities),
       scalpType,
       concerns,
+      diagnosis: diagnosisData,
       aiAnalysis: finalAllReportsText,
       analyzedAt: new Date().toISOString(),
     });

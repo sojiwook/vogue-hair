@@ -107,6 +107,30 @@ function DualScoreCard({ visit, prevVisit }) {
   );
 }
 
+// ── 오늘의 두피 진단 ──────────────────────────────────────────────────────────
+
+function DiagnosisCard({ diagnosis }) {
+  if (!diagnosis) return null;
+  return (
+    <div style={{ background: C.card, borderRadius: 16, padding: 24, marginBottom: 16, border: `1px solid ${C.border}` }}>
+      <h3 style={{ fontSize: 15, fontWeight: 800, marginBottom: 12 }}>🧭 오늘의 두피 진단</h3>
+      {diagnosis.type_label && (
+        <div style={{ background: C.goldBg, borderRadius: 10, padding: "8px 14px", marginBottom: 14, fontSize: 14, fontWeight: 800, color: C.gold }}>
+          {diagnosis.type_label}
+        </div>
+      )}
+      {diagnosis.pattern && (
+        <p style={{ fontSize: 13, color: C.sub, lineHeight: 1.8, marginBottom: 10 }}>{diagnosis.pattern}</p>
+      )}
+      {diagnosis.priority && (
+        <div style={{ background: "#fff0f0", borderRadius: 10, padding: "10px 14px", fontSize: 13, color: C.red, fontWeight: 700, lineHeight: 1.6 }}>
+          ⚡ {diagnosis.priority}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── 2. 내 두피 지도 ─────────────────────────────────────────────────────────
 
 function ScalpDetailMap({ visit }) {
@@ -561,6 +585,9 @@ export default function Report() {
 
         {/* 1. 두피 점수 헤드라인 */}
         <DualScoreCard visit={visit} prevVisit={prevVisit} />
+
+        {/* 🧭 오늘의 두피 진단 */}
+        {scalpParsed?.diagnosis && <DiagnosisCard diagnosis={scalpParsed.diagnosis} />}
 
         {/* 2. 내 두피 지도 */}
         <ScalpDetailMap visit={visit} />

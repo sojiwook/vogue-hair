@@ -40,18 +40,59 @@ export default async function handler(req, res) {
     const buildPrompt = (ci) => {
       if (!ci?.name) return null;
 
+      // 종합 진단 합성 (이미지 없음, 전 부위 점수 기반 → JSON 반환)
+      if (ci.purpose === 'diagnosis_synthesis') {
+        const areas = Array.isArray(ci.perAreaScores) ? ci.perAreaScores : [];
+        const areaLines = areas.map(a => {
+          const d = a.detail || {};
+          return `${a.label}: 수분${d['수분'] ?? '?'} 밀도${d['모발밀도'] ?? '?'} 모공${d['모공'] ?? '?'} 유분${d['유분'] ?? '?'} 민감도${d['민감도'] ?? '?'}`;
+        }).join('\n');
+        const avg = ci.avgScoreDetail || {};
+        const avgLine = `전체 평균: 수분${avg['수분'] ?? '?'} 밀도${avg['모발밀도'] ?? '?'} 모공${avg['모공'] ?? '?'} 유분${avg['유분'] ?? '?'} 민감도${avg['민감도'] ?? '?'}`;
+        const sorted = [...areas].sort((a, b) => (a.scalp_score ?? 50) - (b.scalp_score ?? 50));
+        const lowestArea = sorted[0]?.label ?? '없음';
+        const highestArea = sorted[sorted.length - 1]?.label ?? '없음';
+        const system = `당신은 두피 종합 진단 전문가입니다.
+전체 부위 측정 데이터를 보고 이 고객의 두피를 한 줄로 유형화하고
+이 사람만의 패턴을 서술합니다.
+
+[출력 형식 — JSON만 반환, 다른 텍스트 없이]
+{
+  "type_label": "건성 + 모공 불균형 복합형",
+  "pattern": "정수리 수분(35점)이 후두부(52점)보다 낮고, 모공 균형이 전체 항목 중 가장 취약합니다. 이런 패턴은 두피 앞쪽에 피지와 각질이 집중되는 전형적인 전두부 집중형입니다.",
+  "priority": "지금 가장 급한 건 모공 균형(30점)입니다. 주 2회 스케일링으로 앞머리 쪽 피지 균형부터 잡으세요."
+}
+
+[금지]
+- type_label에 "복합형" 단독 사용 금지 — 반드시 구체적 특징 포함
+- 모든 항목이 나쁘다는 과장 금지
+- 일반론 금지`;
+        const userText = `전체 측정 데이터:
+${areaLines}
+${avgLine}
+가장 낮은 부위: ${lowestArea} / 가장 높은 부위: ${highestArea}`;
+        return { system, userText };
+      }
+
       // 제품 추천 합성 (이미지 없음, 평균 점수 기반)
       if (ci.purpose === 'product_synthesis') {
         const scoresText = ci.scoreDetail
           ? Object.entries(ci.scoreDetail).map(([k, v]) => `${k}: ${v}점`).join(' / ')
           : (ci.scalpScore != null ? `두피 종합 점수: ${ci.scalpScore}점` : '점수 없음');
+        const concernsLine = (ci.hasIntakeData && ci.concerns)
+          ? `고객이 직접 말한 고민: ${ci.concerns}`
+          : `고객 문진 없음 — 측정 수치만으로 추천`;
+        const noIntakeRule = !ci.hasIntakeData
+          ? `\n고객 문진이 없으므로:\n- "탈모가 고민이신", "숱이 적으신" 같은 단정 표현 사용 금지\n- 대신 "측정된 수치 기준으로" / "지금 데이터에서 보이는 주요 특징은" 으로 시작`
+          : '';
         return `당신은 두피 전문 클리닉의 진단사입니다.
 오늘 측정한 두피 지표를 바탕으로 제품 추천만 작성해주세요.
+${noIntakeRule}
 
 [오늘 두피 측정 평균]
 ${scoresText}
-두피 고민: ${ci.concerns}
 두피 타입: ${ci.scalpType}
+${concernsLine}
 
 [시세이도 서브리믹 제품 추천 가이드]
 제품 라인 및 핵심 성분:
@@ -92,25 +133,40 @@ ${scoresText}
       const isAreaOnly = AREA_ONLY.includes(ci.label);
 
       if (isAreaOnly) {
-        return `당신은 두피 전문 클리닉의 진단사입니다.
-[${ci.label}] 부위 두피 이미지를 보고 아래 3가지 항목을 순서대로 작성해주세요.
+        const prev = (ci.prevScoreDetail && typeof ci.prevScoreDetail === 'object' && !Array.isArray(ci.prevScoreDetail))
+          ? ci.prevScoreDetail : null;
+        const fmtScore = (key) => prev?.[key] != null ? `${prev[key]}점` : '미측정';
+        const prevSection = prev
+          ? `이전 방문 수치 (참고):
+수분도: ${fmtScore('수분')} / 50 평균
+모공 밀도: ${fmtScore('모발밀도')} / 50 평균
+모공 상태: ${fmtScore('모공')} / 50 평균
+모공 균형: ${fmtScore('유분')} / 50 평균
+탄력도: ${fmtScore('민감도')} / 50 평균
+가장 낮은 항목: 이전 방문 기준`
+          : '이전 방문 수치: 없음 (첫 측정)';
+        const system = `당신은 두피 전문 분석가입니다. 고객의 두피 이미지와 측정 수치를 보고 부위별 분석 텍스트를 작성합니다.
 
-관찰 (1~2문장) — 이미지에서 관찰되는 두피 상태와 가장 두드러진 특징. 수치가 있으면 인용. (예: "수분이 낮고(42점) 모공이 넓은 건성 패턴입니다. 두피 표면에 미세 각질이 보여요.")
-의미·원인 (1~2문장) — 이 상태가 두피에 미치는 영향, 원인 추정. (예: "두피 장벽이 약해지면 수분 손실이 빨라지고 외부 자극에 민감해져요.")
-행동 (1~2문장) — 내일 당장 가능한 구체적 행동. "~하시면 됩니다" 톤. (예: "샴푸 후 드라이어 찬바람으로 두피를 먼저 말리시면 됩니다.")
+[필수 규칙]
+- 모든 문장은 이 고객의 실제 수치에서 출발해야 합니다
+- 수치를 직접 인용하세요: "수분도 35점은", "모공 균형 30점이"처럼
+- 평균(50점 기준) 대비 위치를 명시하세요: "평균보다 15점 낮은", "평균 수준인"
+- 일반론 금지: "두피 관리가 중요합니다" 같은 문장 사용 불가
+- 항목 레이블("관찰:", "행동:") 없이 자연스러운 서술체로 작성
 
-작성 규칙:
-- 이미지에서 보이는 것만 서술. 추측·부연 설명 금지.
-- 응답 시작에 "[${ci.label}]" 레이블 절대 쓰지 말 것
-- 항목 레이블("관찰", "의미·원인", "행동") 출력 금지 — 본문 문장만 출력
-- 총 3~6문장 (각 항목 1~2문장)
-- "위험", "악화", "심각" 표현 금지
-- 한국어로 작성
+[출력 구조: 총 3~4문장]
+문장1~2: 이미지에서 보이는 것 + 해당 부위 수치 직접 인용
+문장3: 이 수치가 두피에 미치는 영향과 가능한 원인
+문장4: 내일 당장 실천 가능한 구체적 행동 1가지
 
----
-응답 마지막에 반드시 아래 JSON 한 줄을 출력하세요 (설명 없이):
+응답 맨 마지막에 반드시 아래 JSON 한 줄 출력 (설명 없이):
 [SCORE]{"scalp_score":N,"detail":{"유분":N,"수분":N,"모공":N,"민감도":N,"모발밀도":N}}[/SCORE]
-N은 각각 0~100 정수. scalp_score는 두피 종합 점수.`;
+N은 각각 0~100 정수. 문장에서 인용한 수치와 반드시 일치할 것.`;
+        const userText = `부위: ${ci.label}
+${prevSection}
+
+이미지를 분석해 수치를 직접 판단하고, 그 수치를 3~4문장 분석 텍스트에 인용하세요.`;
+        return { system, userText };
       }
 
       const prevMoistureStr = ci.prevMoisture != null ? `${ci.prevMoisture}점` : "미기재";
@@ -247,10 +303,22 @@ ${(ci.prevMoisture != null || ci.prevElasticity != null) ? '이전 방문 데이
 N은 각각 0~100 정수. scalp_score는 두피 종합 점수.`;
     };
 
-    // concerns가 있으면 풀 개인화 프롬프트, 없으면 기존 prompt 또는 기본값 사용
-    const finalPrompt = (customerInfo?.concerns !== undefined ? buildPrompt(customerInfo) : null)
-      || prompt
-      || `두피 전문 AI. ${customerInfo?.name}님의 두피 이미지를 분석해주세요. 한국어로 응답.`;
+    // purpose 또는 concerns 필드가 있으면 buildPrompt 호출 (synthesis 포함)
+    const promptResult = (
+      (customerInfo?.purpose !== undefined || customerInfo?.concerns !== undefined)
+        ? buildPrompt(customerInfo)
+        : null
+    ) || prompt || `두피 전문 AI. ${customerInfo?.name}님의 두피 이미지를 분析해주세요. 한국어로 응답.`;
+
+    // buildPrompt가 { system, userText } 객체 or 문자열을 반환
+    let systemText = null;
+    let userText;
+    if (promptResult && typeof promptResult === 'object' && typeof promptResult.userText === 'string') {
+      systemText = promptResult.system || null;
+      userText = promptResult.userText;
+    } else {
+      userText = String(promptResult);
+    }
 
     const content = [];
     if (image && image.data) {
@@ -261,18 +329,20 @@ N은 각각 0~100 정수. scalp_score는 두피 종합 점수.`;
     }
     content.push({
       type: 'text',
-      text: finalPrompt,
+      text: userText,
     });
 
     // 재시도 대상: 429 (rate limit), 529 (overloaded)
     const RETRYABLE = new Set([429, 529]);
     const RETRY_DELAYS = [5000, 10000]; // 1차 5초, 2차 10초
 
-    const anthropicBody = JSON.stringify({
+    const anthropicBodyObj = {
       model: 'claude-haiku-4-5-20251001',
       max_tokens: 2000,
       messages: [{ role: 'user', content }],
-    });
+    };
+    if (systemText) anthropicBodyObj.system = systemText;
+    const anthropicBody = JSON.stringify(anthropicBodyObj);
 
     let response;
     let attempt = 0;
