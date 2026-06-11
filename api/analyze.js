@@ -1,3 +1,22 @@
+function parseScalpScore(text) {
+  const m = text.match(/\[SCORE\]([\s\S]*?)\[\/SCORE\]/);
+  if (!m) return null;
+  for (let i = 0; i < 2; i++) {
+    try {
+      const raw = i === 0 ? m[1].trim() : m[1].replace(/\s+/g, '');
+      const parsed = JSON.parse(raw);
+      if (typeof parsed.scalp_score === 'number' && parsed.detail && typeof parsed.detail === 'object') {
+        return {
+          scalp_score: Math.min(100, Math.max(0, Math.round(parsed.scalp_score))),
+          score_detail: parsed.detail,
+        };
+      }
+    } catch { /* 2차 시도로 진행 */ }
+  }
+  console.warn('[analyze] [SCORE] 블록 JSON 파싱 2회 실패 — null 반환');
+  return null;
+}
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -20,15 +39,45 @@ export default async function handler(req, res) {
 
     const buildPrompt = (ci) => {
       if (!ci?.name) return null;
+
+      // 부위별 이미지(정수리·측두부·후두부)는 1줄 요약만, 전체/기타는 풀 분석
+      const AREA_ONLY = ['정수리', '측두부(좌)', '측두부(우)', '후두부'];
+      const isAreaOnly = AREA_ONLY.includes(ci.label);
+
+      if (isAreaOnly) {
+        return `당신은 두피 전문 클리닉의 진단사입니다.
+[${ci.label}] 부위 두피 이미지를 분석해 아래 형식으로만 작성해주세요:
+
+[${ci.label}] {이 부위의 두피 상태와 가장 중요한 특이사항 — 1문장}
+
+주의: 이미지에서 보이는 것만 서술. 추측·부연 설명 금지.
+한국어로 작성해주세요.
+
+---
+응답 마지막에 반드시 아래 JSON 한 줄을 출력하세요 (설명 없이):
+[SCORE]{"scalp_score":N,"detail":{"유분":N,"수분":N,"모공":N,"민감도":N,"모발밀도":N}}[/SCORE]
+N은 각각 0~100 정수. scalp_score는 두피 종합 점수.`;
+      }
+
       const prevMoistureStr = ci.prevMoisture != null ? `${ci.prevMoisture}점` : "미기재";
       const prevElasticityStr = ci.prevElasticity != null ? `${ci.prevElasticity}점` : "미기재";
+
+      const sleepLbl = ci.sleep >= 70 ? '양호' : ci.sleep >= 50 ? '보통' : '부족';
+      const stressLbl = ci.stress >= 70 ? '높음' : ci.stress >= 40 ? '보통' : '낮음';
+      const sleepChg = ci.prevSleep != null
+        ? ` / 지난 방문 ${ci.prevSleep}점 대비 ${ci.sleep > ci.prevSleep + 10 ? '개선' : ci.sleep < ci.prevSleep - 10 ? '악화' : '유사'}`
+        : '';
+      const stressChg = ci.prevStress != null
+        ? ` / 지난 방문 ${ci.prevStress}점 대비 ${ci.stress < ci.prevStress - 10 ? '개선' : ci.stress > ci.prevStress + 10 ? '악화' : '유사'}`
+        : '';
+
       return `당신은 두피 전문 클리닉의 진단사입니다.
 아래 고객 정보와 두피 사진을 토대로, 신뢰감 있는 전문 소견을 작성해주세요.
 
 [고객 정보]
 - 이름: ${ci.name} (${ci.age}세)
-- 수면 품질: ${ci.sleep}/100
-- 스트레스 지수: ${ci.stress}/100
+- 수면 품질: ${sleepLbl} (${ci.sleep}/100${sleepChg})
+- 스트레스 수준: ${stressLbl} (${ci.stress}/100${stressChg}) ← 높을수록 스트레스 많음
 - 두피 고민: ${ci.concerns}
 - 평소 두피 타입: ${ci.scalpType}
 - 샴푸 주기: ${ci.shampooFreq}
@@ -41,6 +90,7 @@ ${ci.visit_type === "revisit" ? `
 - 실천 효과: ${ci.action_effect ?? "미응답"}
 ` : ''}
 [작성 원칙]
+- 위 [고객 정보]의 수면 품질·스트레스 수치를 내러티브에서 반드시 그대로 인용. 다른 수치 절대 사용 금지.
 - "~습니다", "~입니다" 기반으로, "~어요"를 자연스럽게 혼용
 - "~거든요", "~해보세요" 같은 과도한 친근함 금지
 - "위험", "악화", "심각" 같은 겁주는 표현 금지
@@ -138,7 +188,12 @@ ${ci.visit_type === "revisit" ? `- 재방문 고객이므로 지난 방문과의
 
 분석 부위: [${ci.label}]
 ${(ci.prevMoisture != null || ci.prevElasticity != null) ? '이전 방문 데이터가 있다면 지표 변화를 간략히 언급해주세요.' : ''}
-한국어로 작성해주세요.`;
+한국어로 작성해주세요.
+
+---
+응답 마지막에 반드시 아래 JSON 한 줄을 출력하세요 (설명 없이):
+[SCORE]{"scalp_score":N,"detail":{"유분":N,"수분":N,"모공":N,"민감도":N,"모발밀도":N}}[/SCORE]
+N은 각각 0~100 정수. scalp_score는 두피 종합 점수.`;
     };
 
     // concerns가 있으면 풀 개인화 프롬프트, 없으면 기존 prompt 또는 기본값 사용
@@ -223,8 +278,18 @@ ${(ci.prevMoisture != null || ci.prevElasticity != null) ? '이전 방문 데이
 
     const data = await response.json();
     const resultText = data.content?.[0]?.text ?? '';
-    console.log('[analyze] 분석 완료 — 응답 길이:', resultText.length, 'chars');
-    return res.status(200).json({ result: resultText });
+
+    const scoreData = parseScalpScore(resultText);
+    if (!scoreData) {
+      console.warn('[analyze] scalp_score 없음 — null로 저장됨');
+    }
+    const cleanText = resultText.replace(/\[SCORE\][\s\S]*?\[\/SCORE\]/, '').trimEnd();
+    console.log('[analyze] 분석 완료 — 응답 길이:', resultText.length, 'chars | scalp_score:', scoreData?.scalp_score ?? 'null');
+    return res.status(200).json({
+      result: cleanText,
+      scalp_score: scoreData?.scalp_score ?? null,
+      score_detail: scoreData?.score_detail ?? null,
+    });
 
   } catch (error) {
     if (error.name === 'AbortError') {

@@ -49,6 +49,7 @@ async function callAI(prompt, imgBase64, imgType, onChunk, label, customerName, 
   }
 
   onChunk(data.result || "");
+  return { scalp_score: data.scalp_score ?? null, score_detail: data.score_detail ?? null };
 }
 
 function Btn({ children, onClick, variant = "primary", size = "md", disabled, full, style = {} }) {
@@ -71,10 +72,14 @@ function Field({ label, value, onChange, placeholder, type = "text", style = {} 
   );
 }
 
-function Chip({ score }) {
+function Chip({ score, label = "웰니스" }) {
   const color = score >= 70 ? C.green : score >= 50 ? "#b07800" : C.red;
   const bg = score >= 70 ? "#edf7f1" : score >= 50 ? "#fff8e6" : "#fff0f0";
-  return <span style={{ fontSize: 12, fontWeight: 800, color, background: bg, padding: "3px 10px", borderRadius: 99 }}>{score}점</span>;
+  return (
+    <span style={{ fontSize: 12, fontWeight: 800, color, background: bg, padding: "3px 10px", borderRadius: 99 }}>
+      <span style={{ fontWeight: 500, opacity: 0.7 }}>{label}</span> {score}점
+    </span>
+  );
 }
 
 function Bar({ value, color }) {
@@ -404,6 +409,8 @@ function ScalpTab({ customer, onUpdate }) {
       label: img.label,
       sleep: surveyData?.sleep ? (sleepMap[surveyData.sleep] ?? 50) : 50,
       stress: surveyData?.stress ? surveyData.stress * 20 : 50,
+      prevSleep: prevVisit?.sleep ?? null,
+      prevStress: prevVisit?.stress ?? null,
       concerns: Array.isArray(surveyData?.scalp_concerns) && surveyData.scalp_concerns.length > 0
         ? surveyData.scalp_concerns.join(", ")
         : "없음",
@@ -419,7 +426,7 @@ function ScalpTab({ customer, onUpdate }) {
 
     try {
       let fullText = "";
-      await callAI(
+      const scoreResult = await callAI(
         null,
         base64, mediaType,
         text => {
@@ -429,7 +436,13 @@ function ScalpTab({ customer, onUpdate }) {
         img.label, customer.name, currentAge,
         customerInfoFull
       );
-      setImages(prev => prev.map((im, i) => i === idx ? { ...im, analyzing: false, done: true } : im));
+      setImages(prev => prev.map((im, i) =>
+        i === idx
+          ? { ...im, analyzing: false, done: true,
+              scalp_score: scoreResult?.scalp_score ?? null,
+              score_detail: scoreResult?.score_detail ?? null }
+          : im
+      ));
     } catch (e) {
       setImages(prev => prev.map((im, i) => i === idx ? { ...im, report: `⚠️ 오류: ${e.message}`, analyzing: false, done: true } : im));
     }
@@ -449,6 +462,28 @@ function ScalpTab({ customer, onUpdate }) {
       return m ? Math.min(100, Math.max(0, parseInt(m[1]))) : null;
     };
     const avg = arr => arr.length > 0 ? Math.round(arr.reduce((a, b) => a + b, 0) / arr.length) : 50;
+
+    const scalpScores = completedImages.map(im => im.scalp_score).filter(v => typeof v === 'number');
+    const avgScalpScore = scalpScores.length > 0
+      ? Math.round(scalpScores.reduce((a, b) => a + b, 0) / scalpScores.length)
+      : null;
+
+    const detailKeys = ["유분", "수분", "모공", "민감도", "모발밀도"];
+    const avgScoreDetail = (() => {
+      const totals = {}, counts = {};
+      for (const im of completedImages) {
+        if (!im.score_detail || typeof im.score_detail !== 'object') continue;
+        for (const k of detailKeys) {
+          if (typeof im.score_detail[k] === 'number') {
+            totals[k] = (totals[k] || 0) + im.score_detail[k];
+            counts[k] = (counts[k] || 0) + 1;
+          }
+        }
+      }
+      const result = {};
+      for (const k of detailKeys) { if (counts[k]) result[k] = Math.round(totals[k] / counts[k]); }
+      return Object.keys(result).length > 0 ? result : null;
+    })();
 
     const moistures = completedImages.map(im => extractNum(im.report, /두피\s*수분도[^\d]*(\d+)/)).filter(v => v !== null);
     const elasticities = completedImages.map(im => extractNum(im.report, /모낭\s*건강도[^\d]*(\d+)/)).filter(v => v !== null);
@@ -493,6 +528,9 @@ function ScalpTab({ customer, onUpdate }) {
       if (avgMoisture !== null) updatePayload.moisture = avgMoisture;
       if (avgElasticity !== null) updatePayload.elasticity = avgElasticity;
       if (!todayVisit.report_token) updatePayload.report_token = crypto.randomUUID();
+      if (avgScalpScore !== null) updatePayload.scalp_score = avgScalpScore;
+      if (avgScoreDetail !== null) updatePayload.score_detail = avgScoreDetail;
+      updatePayload.analysis_version = avgScalpScore !== null ? 'v1' : null;
       await supabase.from("visits").update(updatePayload).eq("id", todayVisit.id);
       visitId = todayVisit.id;
       savedVisit = { ...todayVisit, ...updatePayload };
@@ -509,6 +547,9 @@ function ScalpTab({ customer, onUpdate }) {
         score: 51,
         scalp_report: reportJson,
         report_token: crypto.randomUUID(),
+        scalp_score: avgScalpScore,
+        score_detail: avgScoreDetail,
+        analysis_version: avgScalpScore !== null ? 'v1' : null,
       }).select().single();
       if (visitInsertErr || !newVisit) {
         alert("방문 기록 저장에 실패했습니다. 다시 시도해주세요.");

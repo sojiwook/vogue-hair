@@ -12,7 +12,33 @@ const C = {
   red: "#d94f4f", green: "#3a8c5c", blue: "#3a6fa8",
 };
 
-function ScoreRing({ score }) {
+// ── Utility helpers ──────────────────────────────────────────────────────────
+
+function getAreaKey(url) {
+  if (!url) return null;
+  const filename = (url.split('/').pop() || '').split('?')[0];
+  return ['top', 'left', 'right', 'back', 'full'].find(k => filename.startsWith(k + '_')) ?? null;
+}
+
+function splitAnalysisText(text) {
+  if (!text) return { main: null, products: null };
+  const idx = text.search(/##\s*🛁/);
+  if (idx === -1) return { main: text, products: null };
+  return {
+    main: text.slice(0, idx).trimEnd() || null,
+    products: text.slice(idx).trim() || null,
+  };
+}
+
+function parseScoreDetail(raw) {
+  if (!raw) return null;
+  if (typeof raw === 'object' && !Array.isArray(raw)) return raw;
+  try { return JSON.parse(raw); } catch { return null; }
+}
+
+// ── Score ring ────────────────────────────────────────────────────────────────
+
+function ScoreRing({ score, label = "웰니스 점수" }) {
   const color = score >= 70 ? C.green : score >= 50 ? "#b07800" : C.red;
   const r = 54, circ = 2 * Math.PI * r;
   const dash = (score / 100) * circ;
@@ -25,7 +51,7 @@ function ScoreRing({ score }) {
       </svg>
       <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
         <p style={{ fontSize: 36, fontWeight: 900, color, margin: 0 }}>{score}</p>
-        <p style={{ fontSize: 12, color: C.muted, margin: 0 }}>종합 점수</p>
+        <p style={{ fontSize: 12, color: C.muted, margin: 0 }}>{label}</p>
       </div>
     </div>
   );
@@ -45,13 +71,97 @@ function MetricBar({ label, value, color }) {
   );
 }
 
+// ── 1. 두피 점수 헤드라인 ───────────────────────────────────────────────────
+
+function DualScoreCard({ visit, prevVisit }) {
+  const scalpScore = visit.scalp_score != null ? Number(visit.scalp_score) : null;
+  const wellnessScore = visit.score;
+  const prevScalp = prevVisit?.scalp_score != null ? Number(prevVisit.scalp_score) : null;
+  const diff = (scalpScore != null && prevScalp != null) ? scalpScore - prevScalp : null;
+  const diffColor = diff == null ? C.muted : diff > 0 ? C.green : diff < 0 ? C.red : C.muted;
+
+  const mainScore = scalpScore ?? wellnessScore;
+  const mainLabel = scalpScore != null ? "두피 점수" : "웰니스 점수";
+  const statusMsg = mainScore >= 70
+    ? "두피 상태가 양호해요 👍"
+    : mainScore >= 50 ? "조금 더 관리가 필요해요 💆"
+    : "집중 케어가 필요해요 ⚠️";
+
+  return (
+    <div style={{ background: C.card, borderRadius: 16, padding: 24, marginBottom: 16, border: `1px solid ${C.border}`, textAlign: "center" }}>
+      <ScoreRing score={mainScore} label={mainLabel} />
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10, marginTop: 12, flexWrap: "wrap" }}>
+        {diff != null && (
+          <span style={{ fontSize: 13, fontWeight: 700, color: diffColor }}>
+            {diff > 0 ? `▲${diff}` : diff < 0 ? `▼${Math.abs(diff)}` : "─"} 지난 방문 대비
+          </span>
+        )}
+        {scalpScore != null && (
+          <span style={{ fontSize: 12, color: C.muted, background: C.bg, borderRadius: 99, padding: "3px 10px" }}>
+            웰니스 {wellnessScore}점
+          </span>
+        )}
+      </div>
+      <p style={{ marginTop: 12, fontSize: 14, color: C.sub }}>{statusMsg}</p>
+    </div>
+  );
+}
+
+// ── 2. 내 두피 지도 ─────────────────────────────────────────────────────────
+
+function ScalpDetailMap({ visit }) {
+  const detail = parseScoreDetail(visit.score_detail);
+
+  const ITEMS = [
+    { key: '수분',    label: '두피 수분',  color: C.blue },
+    { key: '모발밀도', label: '모발 밀도',  color: C.green },
+    { key: '모공',    label: '모공 상태',  color: "#8B5CF6" },
+    { key: '유분',    label: '유분 균형',  color: C.gold },
+    { key: '민감도',  label: '민감도',     color: C.red },
+  ];
+
+  if (!detail) {
+    return (
+      <div style={{ background: C.card, borderRadius: 16, padding: 24, marginBottom: 16, border: `1px solid ${C.border}` }}>
+        <h3 style={{ fontSize: 15, fontWeight: 800, marginBottom: 20 }}>📊 두피 지표</h3>
+        <MetricBar label="두피 수분" value={visit.moisture} color={C.blue} />
+        <MetricBar label="모발 탄력" value={visit.elasticity} color={C.green} />
+        <MetricBar label="수면 품질" value={visit.sleep}     color={C.gold} />
+        <MetricBar label="스트레스"  value={visit.stress}    color={C.red}  />
+      </div>
+    );
+  }
+
+  const available = ITEMS.filter(it => typeof detail[it.key] === 'number');
+  if (available.length === 0) return null;
+
+  const sorted = [...available].sort((a, b) => detail[a.key] - detail[b.key]);
+  const weakest = sorted[0];
+
+  return (
+    <div style={{ background: C.card, borderRadius: 16, padding: 24, marginBottom: 16, border: `1px solid ${C.border}` }}>
+      <h3 style={{ fontSize: 15, fontWeight: 800, marginBottom: 10 }}>🗺 내 두피 지도</h3>
+      {available.length >= 2 && (
+        <div style={{ background: "#fff8f0", border: "1px solid #f0d5b8", borderRadius: 10, padding: "9px 14px", marginBottom: 16, fontSize: 13, fontWeight: 700, color: "#8a4a1a" }}>
+          ⚑ {weakest.label}({detail[weakest.key]}점)이 가장 취약 — 집중 관리 권장
+        </div>
+      )}
+      {available.map(item => (
+        <MetricBar key={item.key} label={item.label} value={detail[item.key]} color={item.color} />
+      ))}
+    </div>
+  );
+}
+
+// ── 3. 변화 추적 ─────────────────────────────────────────────────────────────
+
 function CompareSection({ current, prev }) {
   const metrics = [
-    { key: "score",      label: "종합 점수",  higherIsBetter: true },
-    { key: "moisture",   label: "수분도",      higherIsBetter: true },
-    { key: "elasticity", label: "탄력도",      higherIsBetter: true },
-    { key: "sleep",      label: "수면 품질",   higherIsBetter: true },
-    { key: "stress",     label: "스트레스",    higherIsBetter: false },
+    { key: "score",      label: "웰니스",   higherIsBetter: true  },
+    { key: "moisture",   label: "수분도",   higherIsBetter: true  },
+    { key: "elasticity", label: "탄력도",   higherIsBetter: true  },
+    { key: "sleep",      label: "수면",     higherIsBetter: true  },
+    { key: "stress",     label: "스트레스", higherIsBetter: false },
   ];
 
   if (!prev) {
@@ -64,7 +174,6 @@ function CompareSection({ current, prev }) {
   }
 
   const scoreDiff = current.score - prev.score;
-  const overallGood = scoreDiff > 0;
 
   return (
     <div style={{ background: C.card, borderRadius: 16, padding: 24, marginBottom: 16, border: `1px solid ${C.border}` }}>
@@ -88,96 +197,149 @@ function CompareSection({ current, prev }) {
         })}
       </div>
       <p style={{ fontSize: 13, textAlign: "center", fontWeight: 700,
-        color: scoreDiff === 0 ? C.muted : overallGood ? C.green : C.red }}>
-        {scoreDiff === 0 ? "변화 없음" : overallGood ? "개선되고 있어요 👍" : "관리가 필요해요 ⚠️"}
+        color: scoreDiff === 0 ? C.muted : scoreDiff > 0 ? C.green : C.red }}>
+        {scoreDiff === 0 ? "변화 없음" : scoreDiff > 0 ? "개선되고 있어요 👍" : "관리가 필요해요 ⚠️"}
       </p>
     </div>
   );
 }
 
-function renderMd(text) {
-  if (!text) return null;
-  const lines = String(text).split('\n');
-  const output = [];
-  let i = 0;
+// ── 4. 사진 비교 (부위별 쌍) ─────────────────────────────────────────────────
 
-  const isTableLine = s => s.startsWith('|') && s.split('|').length > 2;
-  const isSepLine = s => isTableLine(s) && /^[\|\-\:\s]+$/.test(s);
-  const parseRow = s => s.split('|').slice(1, -1).map(c => c.trim());
+const AREA_ORDER = ['top', 'left', 'right', 'back', 'full'];
+const AREA_LABELS_MAP = { top: '정수리', left: '측두부(좌)', right: '측두부(우)', back: '후두부', full: '전체' };
 
-  while (i < lines.length) {
-    const trimmed = lines[i].trim();
+function PhotoPairSection({ currentImages, prevImages, visit, prevVisit }) {
+  if (currentImages.length === 0) return null;
 
-    if (isTableLine(trimmed)) {
-      const startI = i;
-      const block = [];
-      while (i < lines.length && isTableLine(lines[i].trim())) {
-        block.push(lines[i].trim());
-        i++;
-      }
-      const headers = parseRow(block[0]);
-      const hasSep = block.length > 1 && isSepLine(block[1]);
-      const dataRows = block.slice(hasSep ? 2 : 1).map(parseRow);
-      output.push(
-        <table key={`tbl-${startI}`} style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, marginTop: 8, marginBottom: 8 }}>
-          <thead>
-            <tr>
-              {headers.map((h, j) => (
-                <th key={j} style={{ padding: '7px 10px', textAlign: 'center', border: `1px solid ${C.border}`, background: C.goldBg, fontWeight: 700, color: C.gold }}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          {dataRows.length > 0 && (
-            <tbody>
-              {dataRows.map((row, ri) => (
-                <tr key={ri} style={{ background: ri % 2 === 0 ? C.card : C.bg }}>
-                  {row.map((cell, ci) => (
-                    <td key={ci} style={{ padding: '6px 10px', textAlign: 'center', border: `1px solid ${C.border}`, color: C.text }}>{cell}</td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          )}
-        </table>
-      );
-    } else {
-      if (!trimmed || trimmed === '---') { i++; continue; }
-      if (/^##\s*두피\s*분석\s*[-–]/.test(trimmed)) { i++; continue; }
-      if (/^분석\s*부위\s*:/.test(trimmed)) { i++; continue; }
-      const locMatch = trimmed.match(/^\[([^\]]+)\]$/);
-      if (locMatch) {
-        output.push(<span key={i} style={{ display: 'block', fontSize: 12, fontWeight: 800, color: C.gold, marginTop: 10, marginBottom: 4 }}>📍 {locMatch[1]}</span>);
-        i++;
-        continue;
-      }
-      const headerMatch = trimmed.match(/^#{1,3}\s+(.*)/);
-      if (headerMatch) {
-        const headerText = headerMatch[1].trim();
-        if (headerText) {
-          output.push(
-            <span key={i} style={{ display: 'block', fontWeight: 800, color: C.gold, marginTop: output.length > 0 ? 10 : 0, marginBottom: 4 }}>
-              {headerText}
-            </span>
-          );
-        }
-      } else {
-        const parts = trimmed.split('**');
-        output.push(
-          <span key={i} style={{ display: 'block', marginBottom: 2 }}>
-            {parts.map((part, pi) =>
-              pi % 2 === 1
-                ? <strong key={pi} style={{ color: C.gold }}>{part}</strong>
-                : <span key={pi}>{part}</span>
-            )}
-          </span>
-        );
-      }
-      i++;
-    }
+  const imgBase = { width: "100%", aspectRatio: "1", objectFit: "cover", display: "block", borderRadius: 8 };
+  const hasPrev = prevImages.length > 0;
+
+  if (!hasPrev) {
+    const cols = currentImages.length === 1 ? 1 : currentImages.length <= 3 ? 3 : 3;
+    return (
+      <div style={{ background: C.card, borderRadius: 16, padding: 24, marginBottom: 16, border: `1px solid ${C.border}` }}>
+        <h3 style={{ fontSize: 15, fontWeight: 800, marginBottom: 16 }}>📸 이번 방문 두피 사진</h3>
+        <div style={{ display: "grid", gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: 10 }}>
+          {currentImages.map((url, i) => {
+            const k = getAreaKey(url);
+            return (
+              <div key={i} style={{ textAlign: "center" }}>
+                <img src={url} alt={k ? AREA_LABELS_MAP[k] : `사진 ${i + 1}`}
+                  style={{ ...imgBase, border: `2px solid ${C.goldLight}` }} />
+                <p style={{ fontSize: 10, color: C.sub, marginTop: 4, fontWeight: 600 }}>
+                  {k ? AREA_LABELS_MAP[k] : `사진 ${i + 1}`}
+                </p>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
   }
 
-  return output;
+  const curMap = {}, prevMap = {};
+  currentImages.forEach(url => { const k = getAreaKey(url); if (k && !curMap[k]) curMap[k] = url; });
+  prevImages.forEach(url => { const k = getAreaKey(url); if (k && !prevMap[k]) prevMap[k] = url; });
+
+  const orderedPairs = AREA_ORDER.filter(k => curMap[k]);
+  const unkeyedCur = currentImages.filter(url => !getAreaKey(url));
+
+  return (
+    <div style={{ background: C.card, borderRadius: 16, padding: 24, marginBottom: 16, border: `1px solid ${C.border}` }}>
+      <h3 style={{ fontSize: 15, fontWeight: 800, marginBottom: 16 }}>📸 두피 사진 변화</h3>
+
+      {orderedPairs.map(k => (
+        <div key={k} style={{ marginBottom: 16 }}>
+          <p style={{ fontSize: 12, fontWeight: 800, color: C.text, marginBottom: 8 }}>{AREA_LABELS_MAP[k]}</p>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+            <div style={{ textAlign: "center" }}>
+              <p style={{ fontSize: 10, color: C.muted, marginBottom: 5, fontWeight: 600 }}>이전 ({prevVisit.date})</p>
+              {prevMap[k]
+                ? <img src={prevMap[k]} alt={`이전 ${AREA_LABELS_MAP[k]}`}
+                    style={{ ...imgBase, border: `1px solid ${C.border}` }} />
+                : (
+                  <div style={{ aspectRatio: "1", background: C.bg, borderRadius: 8, border: `1px dashed ${C.border}`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <p style={{ fontSize: 9, color: C.muted, textAlign: "center", padding: 4 }}>첫 측정<br />다음 방문부터 비교</p>
+                  </div>
+                )
+              }
+            </div>
+            <div style={{ textAlign: "center" }}>
+              <p style={{ fontSize: 10, color: C.gold, marginBottom: 5, fontWeight: 600 }}>현재 ({visit.date})</p>
+              <img src={curMap[k]} alt={`현재 ${AREA_LABELS_MAP[k]}`}
+                style={{ ...imgBase, border: `2px solid ${C.goldLight}` }} />
+            </div>
+          </div>
+        </div>
+      ))}
+
+      {unkeyedCur.length > 0 && (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, marginTop: 8 }}>
+          {unkeyedCur.map((url, i) => (
+            <div key={i} style={{ textAlign: "center" }}>
+              <p style={{ fontSize: 10, color: C.gold, marginBottom: 5, fontWeight: 600 }}>현재 ({visit.date})</p>
+              <img src={url} alt={`현재 사진 ${i + 1}`}
+                style={{ ...imgBase, border: `2px solid ${C.goldLight}` }} />
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 16 }}>
+        {[{ label: "수분도", key: "moisture", color: C.gold }, { label: "탄력도", key: "elasticity", color: C.green }].map(m => {
+          const diff = visit[m.key] - prevVisit[m.key];
+          const diffColor = diff > 0 ? C.green : diff < 0 ? C.red : C.muted;
+          const arrow = diff > 0 ? "▲" : diff < 0 ? "▼" : "─";
+          return (
+            <div key={m.key} style={{ background: C.bg, borderRadius: 10, padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ fontSize: 12, color: C.sub }}>{m.label}</span>
+              <span style={{ fontSize: 12, fontWeight: 800 }}>
+                <span style={{ color: C.muted }}>{prevVisit[m.key]} → </span>
+                <span style={{ color: m.color }}>{visit[m.key]}</span>
+                <span style={{ color: diffColor, fontSize: 11, marginLeft: 4 }}>{arrow}{Math.abs(diff)}</span>
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
 }
+
+// ── 6. 제품 추천 카드 (측정값 근거 포함) ────────────────────────────────────
+
+function ProductCard({ text, visit }) {
+  const content = text.replace(/^##\s*🛁[^\n]*\n?/, '').trim();
+  const detail = parseScoreDetail(visit.score_detail);
+
+  const basisItems = detail
+    ? [
+        { key: '수분', label: '두피 수분' },
+        { key: '모발밀도', label: '모발 밀도' },
+        { key: '유분', label: '유분' },
+      ].filter(it => typeof detail[it.key] === 'number').map(it => `${it.label} ${detail[it.key]}점`)
+    : (visit.moisture != null ? [`수분도 ${visit.moisture}점`, `탄력도 ${visit.elasticity}점`] : []);
+
+  return (
+    <div style={{ background: C.card, borderRadius: 16, padding: 24, marginBottom: 16, border: `1px solid ${C.border}` }}>
+      <h3 style={{ fontSize: 15, fontWeight: 800, marginBottom: 12 }}>🛁 오늘의 제품 추천</h3>
+      {basisItems.length > 0 && (
+        <div style={{ background: C.goldBg, borderRadius: 10, padding: "8px 14px", marginBottom: 14, fontSize: 12, color: C.gold, fontWeight: 700 }}>
+          📊 측정 기준: {basisItems.join(' · ')}
+        </div>
+      )}
+      <div style={{ fontSize: 13, color: C.sub, lineHeight: 1.9 }}>
+        {renderMarkdown(content)}
+      </div>
+      <div style={{ marginTop: 14, padding: "10px 14px", background: C.bg, borderRadius: 10, fontSize: 12, color: C.muted, textAlign: "center" }}>
+        📅 다음 방문에서 사용 후 변화를 함께 확인합니다
+      </div>
+    </div>
+  );
+}
+
+// ── Markdown renderer ─────────────────────────────────────────────────────────
 
 function renderMarkdown(text) {
   if (!text) return null;
@@ -189,6 +351,15 @@ function renderMarkdown(text) {
     const locMatch = trimmed.match(/^\[([^\]]+)\]$/);
     if (locMatch) {
       return <p key={i} style={{ fontSize: 12, fontWeight: 800, color: C.gold, marginTop: 10, marginBottom: 4 }}>📍 {locMatch[1]}</p>;
+    }
+    const locInlineMatch = trimmed.match(/^\[([^\]]+)\]\s+(.+)/);
+    if (locInlineMatch) {
+      return (
+        <p key={i} style={{ fontSize: 13, color: C.sub, lineHeight: 1.8, marginBottom: 4 }}>
+          <span style={{ fontWeight: 800, color: C.gold }}>📍 {locInlineMatch[1]}</span>
+          {' '}{locInlineMatch[2]}
+        </p>
+      );
     }
     const headerMatch = trimmed.match(/^#{1,3}\s+(.*)/);
     if (headerMatch) {
@@ -209,86 +380,7 @@ function renderMarkdown(text) {
   });
 }
 
-function PhotoGrid({ images, borderColor, compact }) {
-  const labelMap = { top: '정수리', left: '측두부(좌)', right: '측두부(우)', back: '후두부', full: '전체' };
-  const getLabel = (url, i) => {
-    if (!url) return `사진 ${i + 1}`;
-    const filename = url.split('/').pop()?.split('_')[0] || '';
-    return labelMap[filename] || `사진 ${i + 1}`;
-  };
-  const n = images.length;
-  if (n === 0) return null;
-  const imgBase = {
-    objectFit: "cover", display: "block",
-    borderRadius: compact ? 6 : 10,
-    ...(borderColor ? { border: `2px solid ${borderColor}` } : { border: `1px solid ${C.border}` }),
-  };
-  const lbl = (url, i) => (
-    <p style={{ fontSize: compact ? 10 : 11, color: compact ? C.muted : C.sub, marginTop: compact ? 2 : 4, fontWeight: 600, marginBottom: 0 }}>
-      {getLabel(url, i)}
-    </p>
-  );
-  const gap = compact ? 4 : 8;
-
-  if (n === 1) {
-    const sz = compact ? 80 : 160;
-    return (
-      <div style={{ display: "flex", justifyContent: "center" }}>
-        <div style={{ textAlign: "center" }}>
-          <img src={images[0]} alt={getLabel(images[0], 0)} style={{ ...imgBase, width: sz, height: sz }} />
-          {lbl(images[0], 0)}
-        </div>
-      </div>
-    );
-  }
-
-  if (n === 5) {
-    const sz = compact ? 76 : 140;
-    return (
-      <div style={{ display: "flex", gap: compact ? 6 : 10, overflowX: "auto", paddingBottom: 4 }}>
-        {images.map((url, i) => (
-          <div key={i} style={{ flexShrink: 0, textAlign: "center" }}>
-            <img src={url} alt={getLabel(url, i)} style={{ ...imgBase, width: sz, height: sz }} />
-            {lbl(url, i)}
-          </div>
-        ))}
-      </div>
-    );
-  }
-
-  if (n === 3) {
-    return (
-      <div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap }}>
-          {images.slice(0, 2).map((url, i) => (
-            <div key={i} style={{ textAlign: "center" }}>
-              <img src={url} alt={getLabel(url, i)} style={{ ...imgBase, width: "100%", aspectRatio: "1" }} />
-              {lbl(url, i)}
-            </div>
-          ))}
-        </div>
-        <div style={{ display: "flex", justifyContent: "center", marginTop: gap }}>
-          <div style={{ width: `calc(50% - ${gap / 2}px)`, textAlign: "center" }}>
-            <img src={images[2]} alt={getLabel(images[2], 2)} style={{ ...imgBase, width: "100%", aspectRatio: "1" }} />
-            {lbl(images[2], 2)}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // n === 2 (2열) 또는 n === 4 (2×2 그리드)
-  return (
-    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap }}>
-      {images.map((url, i) => (
-        <div key={i} style={{ textAlign: "center" }}>
-          <img src={url} alt={getLabel(url, i)} style={{ ...imgBase, width: "100%", aspectRatio: "1" }} />
-          {lbl(url, i)}
-        </div>
-      ))}
-    </div>
-  );
-}
+// ── Main Report component ─────────────────────────────────────────────────────
 
 export default function Report() {
   const [data, setData] = useState(null);
@@ -395,7 +487,6 @@ export default function Report() {
   );
 
   const { customer, visit, prevVisit } = data;
-  const scoreColor = visit.score >= 70 ? C.green : visit.score >= 50 ? "#b07800" : C.red;
 
   const parseScalpReport = raw => {
     if (!raw) return null;
@@ -412,6 +503,8 @@ export default function Report() {
 
   const currentImages = Array.isArray(visit.scalp_images) ? visit.scalp_images : [];
   const prevImages = Array.isArray(prevVisit?.scalp_images) ? prevVisit.scalp_images : [];
+
+  const { main: analysisText, products: productText } = splitAnalysisText(scalpText);
 
   const submitSatisfaction = async () => {
     if (!q1 || !q2 || !q3 || satSubmitted || satSubmitting) return;
@@ -445,81 +538,38 @@ export default function Report() {
           <p style={{ fontSize: 13, color: C.muted }}>담당: {customer.stylist} · 시술: {visit.service || "두피 케어"}</p>
         </div>
 
-        {/* 종합 점수 */}
-        <div style={{ background: C.card, borderRadius: 16, padding: 24, marginBottom: 16, border: `1px solid ${C.border}`, textAlign: "center" }}>
-          <ScoreRing score={visit.score} />
-          <p style={{ marginTop: 16, fontSize: 14, color: C.sub }}>
-            {visit.score >= 70 ? "두피 상태가 양호해요 👍" : visit.score >= 50 ? "조금 더 관리가 필요해요 💆" : "집중 케어가 필요해요 ⚠️"}
-          </p>
-        </div>
+        {/* 1. 두피 점수 헤드라인 */}
+        <DualScoreCard visit={visit} prevVisit={prevVisit} />
 
-        {/* 지표 */}
-        <div style={{ background: C.card, borderRadius: 16, padding: 24, marginBottom: 16, border: `1px solid ${C.border}` }}>
-          <h3 style={{ fontSize: 15, fontWeight: 800, marginBottom: 20 }}>📊 상세 지표</h3>
-          <MetricBar label="수면 품질" value={visit.sleep} color={C.blue} />
-          <MetricBar label="스트레스" value={visit.stress} color={C.red} />
-          <MetricBar label="두피 수분" value={visit.moisture} color={C.gold} />
-          <MetricBar label="모발 탄력" value={visit.elasticity} color={C.green} />
-        </div>
+        {/* 2. 내 두피 지도 */}
+        <ScalpDetailMap visit={visit} />
 
-        {/* 전후 비교 */}
+        {/* 3. 변화 추적 */}
         <CompareSection current={visit} prev={prevVisit} />
 
-        {/* 두피 사진 섹션 */}
-        {currentImages.length > 0 && (
-          prevImages.length > 0 ? (
-            /* 전후 비교 레이아웃 */
-            <div style={{ background: C.card, borderRadius: 16, padding: 24, marginBottom: 16, border: `1px solid ${C.border}` }}>
-              <h3 style={{ fontSize: 15, fontWeight: 800, marginBottom: 16 }}>📸 두피 사진 변화</h3>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>
-                <div>
-                  <p style={{ fontSize: 11, color: C.muted, marginBottom: 8, textAlign: "center", fontWeight: 700 }}>이전 ({prevVisit.date})</p>
-                  <PhotoGrid images={prevImages.slice(0, 5)} compact />
-                </div>
-                <div>
-                  <p style={{ fontSize: 11, color: C.gold, marginBottom: 8, textAlign: "center", fontWeight: 700 }}>현재 ({visit.date})</p>
-                  <PhotoGrid images={currentImages.slice(0, 5)} borderColor={C.goldLight} compact />
-                </div>
-              </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-                {[{ label: "수분도", key: "moisture", color: C.gold }, { label: "탄력도", key: "elasticity", color: C.green }].map(m => {
-                  const diff = visit[m.key] - prevVisit[m.key];
-                  const diffColor = diff > 0 ? C.green : diff < 0 ? C.red : C.muted;
-                  const arrow = diff > 0 ? "▲" : diff < 0 ? "▼" : "─";
-                  return (
-                    <div key={m.key} style={{ background: C.bg, borderRadius: 10, padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                      <span style={{ fontSize: 12, color: C.sub }}>{m.label}</span>
-                      <span style={{ fontSize: 12, fontWeight: 800 }}>
-                        <span style={{ color: C.muted }}>{prevVisit[m.key]} → </span>
-                        <span style={{ color: m.color }}>{visit[m.key]}</span>
-                        <span style={{ color: diffColor, fontSize: 11, marginLeft: 4 }}>{arrow}{Math.abs(diff)}</span>
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          ) : (
-            /* 단독 표시 레이아웃 */
-            <div style={{ background: C.card, borderRadius: 16, padding: 24, marginBottom: 16, border: `1px solid ${C.border}` }}>
-              <h3 style={{ fontSize: 15, fontWeight: 800, marginBottom: 16 }}>📸 이번 방문 두피 사진</h3>
-              <PhotoGrid images={currentImages} borderColor={C.goldLight} />
-            </div>
-          )
-        )}
+        {/* 4. 사진 비교 (부위 쌍) */}
+        <PhotoPairSection
+          currentImages={currentImages}
+          prevImages={prevImages}
+          visit={visit}
+          prevVisit={prevVisit}
+        />
 
-        {/* AI 두피 분석 */}
-        {scalpText && (
+        {/* 5. AI 통합 분석 (제품 섹션 제외) */}
+        {analysisText && (
           <div style={{ background: C.card, borderRadius: 16, padding: 24, marginBottom: 16, border: `1px solid ${C.border}` }}>
-            <h3 style={{ fontSize: 15, fontWeight: 800, marginBottom: 16 }}>🔬 AI 두피 분석 결과</h3>
+            <h3 style={{ fontSize: 15, fontWeight: 800, marginBottom: 16 }}>🔬 AI 두피 분석</h3>
             {scalpParsed?.scalpType && scalpParsed.scalpType !== "분석 참조" && (
               <p style={{ fontSize: 13, color: C.gold, fontWeight: 700, marginBottom: 12 }}>두피 타입: {scalpParsed.scalpType}</p>
             )}
             <div style={{ fontSize: 13, color: C.sub, lineHeight: 1.9 }}>
-              {renderMarkdown(scalpText)}
+              {renderMarkdown(analysisText)}
             </div>
           </div>
         )}
+
+        {/* 6. 제품 추천 (측정값 근거 포함, 1곳에만) */}
+        {productText && <ProductCard text={productText} visit={visit} />}
 
         {/* 메모 */}
         {visit.note && (
