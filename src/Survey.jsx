@@ -137,37 +137,19 @@ function Survey() {
     const sleepMap = { "5시간 이하": 30, "5~6시간": 50, "6~7시간": 70, "7시간 이상": 85 };
     const condMap = { "나쁨": 35, "보통": 55, "좋음": 75 };
 
-    // 1. surveys 저장
-    const { data: existingSurveys, error: surveyQueryErr } = await supabase
-      .from("surveys")
-      .select("id")
-      .eq("phone", form.phone)
-      .order("created_at", { ascending: false })
-      .limit(1);
-    const existingSurvey = existingSurveys?.[0] ?? null;
-
-    if (existingSurvey) {
-      const { error: surveyUpdateErr } = await supabase.from("surveys").update({
-        name: form.name,
-        sleep: form.sleep,
-        stress: form.stress,
-        condition: form.condition,
-        scalp_concerns: form.scalp_concerns,
-        shampoo_frequency: form.shampoo_frequency,
-        scalp_type: form.scalp_type,
-      }).eq("id", existingSurvey.id);
-    } else {
-      const { error: surveyInsertErr } = await supabase.from("surveys").insert({
-        name: form.name,
-        phone: form.phone,
-        sleep: form.sleep,
-        stress: form.stress,
-        condition: form.condition,
-        scalp_concerns: form.scalp_concerns,
-        shampoo_frequency: form.shampoo_frequency,
-        scalp_type: form.scalp_type,
-      });
-    }
+    // 1. surveys 저장 — 종단 데이터: 방문마다 새 행으로 append (덮어쓰지 않음)
+    const { data: insertedSurvey } = await supabase.from("surveys").insert({
+      name: form.name,
+      phone: form.phone,
+      sleep: form.sleep,
+      stress: form.stress,
+      condition: form.condition,
+      scalp_concerns: form.scalp_concerns,
+      shampoo_frequency: form.shampoo_frequency,
+      scalp_type: form.scalp_type,
+      visit_type: "new",
+    }).select("id").single();
+    const newSurveyId = insertedSurvey?.id ?? null;
 
     // 2. customers 저장
     const age = calcAge(form.birth_date);
@@ -265,8 +247,9 @@ function Survey() {
       const { data: linkedVisit } = await supabase
         .from("visits").select("id").eq("customer_id", customerId).eq("date", today).limit(1);
       const visitId = linkedVisit?.[0]?.id;
-      if (visitId) {
-        await supabase.from("surveys").update({ visit_id: visitId }).eq("phone", form.phone);
+      if (visitId && newSurveyId) {
+        // 방금 넣은 이 문진 행에만 visit_id 연결 (전화번호 전체 덮어쓰기 금지)
+        await supabase.from("surveys").update({ visit_id: visitId }).eq("id", newSurveyId);
       }
     } catch { /* 조용히 넘어감 */ }
 
@@ -599,14 +582,6 @@ function RevisitSurvey() {
     if (!customer) return;
     setSaving(true);
 
-    const { data: existingSurveys } = await supabase
-      .from("surveys")
-      .select("id")
-      .eq("phone", form.phone)
-      .order("created_at", { ascending: false })
-      .limit(1);
-    const existingSurvey = existingSurveys?.[0] ?? null;
-
     const surveyData = {
       name: customer.name,
       scalp_change: form.scalp_change,
@@ -618,11 +593,11 @@ function RevisitSurvey() {
       visit_type: "revisit",
     };
 
-    if (existingSurvey) {
-      await supabase.from("surveys").update(surveyData).eq("id", existingSurvey.id);
-    } else {
-      await supabase.from("surveys").insert({ ...surveyData, phone: form.phone });
-    }
+    // 종단 데이터: 재방문 문진도 매번 새 행으로 append (덮어쓰지 않음)
+    const { data: insertedSurvey } = await supabase.from("surveys")
+      .insert({ ...surveyData, phone: form.phone })
+      .select("id").single();
+    const newSurveyId = insertedSurvey?.id ?? null;
 
     const sleepMap = { "잘 자요": 85, "비슷해요": 70, "못 자요": 50 };
     const stressMap = { "줄었어요": 20, "비슷해요": 50, "늘었어요": 80 };
@@ -657,8 +632,9 @@ function RevisitSurvey() {
       const { data: linkedVisit } = await supabase
         .from("visits").select("id").eq("customer_id", customer.id).eq("date", today).limit(1);
       const visitId = linkedVisit?.[0]?.id;
-      if (visitId) {
-        await supabase.from("surveys").update({ visit_id: visitId }).eq("phone", form.phone);
+      if (visitId && newSurveyId) {
+        // 방금 넣은 이 문진 행에만 visit_id 연결 (전화번호 전체 덮어쓰기 금지)
+        await supabase.from("surveys").update({ visit_id: visitId }).eq("id", newSurveyId);
       }
     } catch { /* 조용히 넘어감 */ }
 

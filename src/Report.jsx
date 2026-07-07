@@ -247,6 +247,105 @@ function CompareSection({ current, prev }) {
   );
 }
 
+// ── 3.5 나의 변화 이야기 (행동 → 몸의 변화 되먹임 고리) ──────────────────────
+
+const SD_LABELS = { 수분: "두피 수분", 모발밀도: "모발 밀도", 모공: "모공 상태", 유분: "유분 균형", 민감도: "민감도" };
+
+// 지난 방문에 "가장 취약했던" 항목을 골라, 그 항목의 이번 변화를 추적한다.
+// score_detail이 없으면 수분도(두 방문 모두 존재)로 대체한다.
+function pickFocusMetric(visit, prevVisit) {
+  const cur = parseScoreDetail(visit.score_detail);
+  const prev = parseScoreDetail(prevVisit?.score_detail);
+  if (cur && prev) {
+    const keys = Object.keys(SD_LABELS).filter(k => typeof prev[k] === 'number' && typeof cur[k] === 'number');
+    if (keys.length) {
+      keys.sort((a, b) => prev[a] - prev[b]); // 지난번 가장 낮았던(취약했던) 항목
+      const key = keys[0];
+      return { label: SD_LABELS[key], prev: prev[key], cur: cur[key] };
+    }
+  }
+  if (prevVisit?.moisture != null && visit.moisture != null) {
+    return { label: "두피 수분", prev: Number(prevVisit.moisture), cur: Number(visit.moisture) };
+  }
+  return null;
+}
+
+function LoopStep({ n, tag, color, children }) {
+  return (
+    <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+      <div style={{ flexShrink: 0, width: 26, height: 26, borderRadius: 99, background: color, color: "#fff", fontSize: 13, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center" }}>{n}</div>
+      <div style={{ flex: 1 }}>
+        <p style={{ fontSize: 11, color: C.muted, fontWeight: 700, marginBottom: 3 }}>{tag}</p>
+        <div style={{ fontSize: 14, color: C.text, fontWeight: 600, lineHeight: 1.6 }}>{children}</div>
+      </div>
+    </div>
+  );
+}
+
+// revisit = 최신 재방문 문진(surveys). action_taken 이 있어야 "행동" 스텝이 성립한다.
+function BehaviorLoopCard({ visit, prevVisit, revisit }) {
+  if (!prevVisit) return null;                 // 비교할 이전 방문이 없으면 이야기가 성립 안 함
+  const action = revisit?.action_taken;
+  if (!action) return null;                    // 실천 데이터가 없으면 카드 자체를 숨김 (지어내지 않음)
+
+  const didAct = action !== "못 했어요";
+  const focus = pickFocusMetric(visit, prevVisit);
+  const delta = focus ? focus.cur - focus.prev : null;
+  const arrow = delta == null ? "" : delta > 0 ? "▲" : delta < 0 ? "▼" : "─";
+
+  let verdict, vColor, vBg, resultColor;
+  if (!didAct) {
+    verdict = "이번엔 실천이 어려우셨군요. 다음엔 딱 한 가지만 해봐요 🌱";
+    vColor = C.sub; vBg = C.bg; resultColor = C.muted;
+  } else if (delta != null && delta > 0) {
+    verdict = "내가 한 행동이 몸의 변화로 이어졌어요 🎉";
+    vColor = C.green; vBg = "#f0f8f2"; resultColor = C.green;
+  } else if (delta != null && delta < 0) {
+    verdict = "아직 숫자로는 안 보여도, 꾸준함이 쌓이고 있어요";
+    vColor = "#8a4a1a"; vBg = "#fff8f0"; resultColor = C.red;
+  } else {
+    verdict = "꾸준히 관리를 이어가고 계세요 👍";
+    vColor = C.gold; vBg = C.goldBg; resultColor = C.gold;
+  }
+
+  const connector = <div style={{ height: 14, borderLeft: `2px dotted ${C.border}`, marginLeft: 12 }} />;
+
+  return (
+    <div style={{ background: C.card, borderRadius: 16, padding: 24, marginBottom: 16, border: `1px solid ${C.border}` }}>
+      <h3 style={{ fontSize: 15, fontWeight: 800, marginBottom: 18 }}>🔄 나의 변화 이야기</h3>
+
+      <LoopStep n="1" tag={`지난 방문 · ${prevVisit.date}`} color={C.muted}>
+        {focus
+          ? <>‘{focus.label}’이 가장 신경 쓸 부분이었어요 <span style={{ color: C.muted, fontWeight: 700 }}>({focus.prev}점)</span></>
+          : "지난 방문을 기록했어요"}
+      </LoopStep>
+      {connector}
+
+      <LoopStep n="2" tag="그 사이 내가 한 것" color={C.gold}>
+        {didAct ? action : "이번엔 실천을 못 하셨어요"}
+        {didAct && revisit?.action_effect && (
+          <span style={{ fontSize: 12, color: C.gold, fontWeight: 700 }}> · 느낀 효과: {revisit.action_effect}</span>
+        )}
+      </LoopStep>
+      {connector}
+
+      <LoopStep n="3" tag={`이번 방문 · ${visit.date}`} color={resultColor}>
+        {focus
+          ? <>‘{focus.label}’ <span style={{ color: C.muted, fontWeight: 700 }}>{focus.prev} → {focus.cur}</span>{" "}
+              <span style={{ color: resultColor, fontWeight: 900 }}>{arrow}{Math.abs(delta)}</span></>
+          : "이번 방문을 기록했어요"}
+        {revisit?.scalp_change && (
+          <p style={{ fontSize: 12, color: C.sub, fontWeight: 500, marginTop: 2 }}>느낌도 “{revisit.scalp_change}”</p>
+        )}
+      </LoopStep>
+
+      <div style={{ marginTop: 16, background: vBg, borderRadius: 10, padding: "11px 14px", fontSize: 13, fontWeight: 700, color: vColor, textAlign: "center" }}>
+        {verdict}
+      </div>
+    </div>
+  );
+}
+
 // ── 4. 사진 비교 (부위별 쌍) ─────────────────────────────────────────────────
 
 const AREA_ORDER = ['top', 'left', 'right', 'back', 'full'];
@@ -436,6 +535,7 @@ export default function Report() {
   const [q3, setQ3] = useState(null);
   const [satSubmitted, setSatSubmitted] = useState(false);
   const [satSubmitting, setSatSubmitting] = useState(false);
+  const [revisit, setRevisit] = useState(null);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -519,6 +619,32 @@ export default function Report() {
     check();
   }, [data]);
 
+  // 이 방문에 연결된 문진 로드 — "나의 변화 이야기" 카드의 실천(action) 데이터
+  useEffect(() => {
+    if (!data?.visit?.id) return;
+    const loadRevisit = async () => {
+      // 1순위: visit_id로 이 방문의 문진을 정확히 매칭 (종단 정합)
+      const { data: byVisit } = await supabase
+        .from("surveys")
+        .select("visit_type,action_taken,action_effect,scalp_change")
+        .eq("visit_id", data.visit.id)
+        .limit(1);
+      if (byVisit?.[0]) { setRevisit(byVisit[0]); return; }
+
+      // 폴백: visit_id 없던 구 데이터 → 전화번호 기준 최신 재방문 문진
+      if (!data.customer?.phone) return;
+      const { data: byPhone } = await supabase
+        .from("surveys")
+        .select("visit_type,action_taken,action_effect,scalp_change,created_at")
+        .eq("phone", data.customer.phone)
+        .eq("visit_type", "revisit")
+        .order("created_at", { ascending: false })
+        .limit(1);
+      setRevisit(byPhone?.[0] ?? null);
+    };
+    loadRevisit();
+  }, [data]);
+
   if (loading) return (
     <div style={{ minHeight: "100vh", background: C.bg, display: "flex", alignItems: "center", justifyContent: "center" }}>
       <p style={{ color: C.muted, fontSize: 14 }}>리포트 불러오는 중...</p>
@@ -586,6 +712,9 @@ export default function Report() {
 
         {/* 1. 두피 점수 헤드라인 */}
         <DualScoreCard visit={visit} prevVisit={prevVisit} />
+
+        {/* 🔄 나의 변화 이야기 (행동 → 몸의 변화) */}
+        <BehaviorLoopCard visit={visit} prevVisit={prevVisit} revisit={revisit} />
 
         {/* 🧭 오늘의 두피 진단 */}
         {scalpParsed?.diagnosis && <DiagnosisCard diagnosis={scalpParsed.diagnosis} />}

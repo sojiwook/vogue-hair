@@ -284,7 +284,7 @@ export default function Owner() {
       const [customersRes, visitsRes, surveysRes, satisfactionsRes, offersRes] = await Promise.all([
         supabase.from("customers").select("id,name,phone,gender,birth_date,age,stylist,created_at,is_test"),
         supabase.from("visits").select("id,customer_id,date,moisture,elasticity,kakao_message"),
-        supabase.from("surveys").select("id,phone,scalp_concerns,scalp_type"),
+        supabase.from("surveys").select("id,phone,scalp_concerns,scalp_type,visit_type,action_taken,action_effect,created_at"),
         supabase.from("satisfaction").select("id,visit_id,q1_report_helpful,q2_home_care,q3_revisit_intention"),
         supabase.from("report_offers").select("id,customer_id,offered_at,price,accepted,hair_loss_concern,age_group,offered_by,created_at").order("offered_at", { ascending: false }),
       ]);
@@ -299,6 +299,10 @@ export default function Owner() {
       const customers = allCustomers.filter(c => c.is_test !== true);
       const visits    = allVisits.filter(v => !testIds.has(v.customer_id));
 
+      // 만족도는 visit_id 기준 → 실고객 방문에 속한 응답만 통계에 포함 (테스트 데이터 제외)
+      const validVisitIds  = new Set(visits.map(v => v.id));
+      const satisfactions  = allSatisfactions.filter(s => validVisitIds.has(s.visit_id));
+
       // phone → 실고객 객체 맵 (is_test 제외된 customers만 사용)
       const phoneToCustomer = {};
       customers.forEach(c => { if (c.phone) phoneToCustomer[c.phone] = c; });
@@ -307,6 +311,18 @@ export default function Owner() {
       const surveys = allSurveys
         .filter(s => s.phone && phoneToCustomer[s.phone])
         .map(s => ({ ...s, _cust: phoneToCustomer[s.phone] }));
+
+      // append-only(방문마다 문진 1행) 구조 → 프로필/고민 분포는 고객당 최신 1건만 집계(중복 방지).
+      // 행동(action) 지표는 모든 재방문 문진(surveys)을 그대로 사용 = 시계열.
+      const latestByPhone = {};      // 고민·연령대용: 고객별 최신 문진
+      const latestTypeByPhone = {};  // 두피 타입용: scalp_type 있는 최신 문진(재방문엔 없음)
+      surveys.forEach(s => {
+        const p = s.phone;
+        if (!latestByPhone[p] || (s.created_at || "") > (latestByPhone[p].created_at || "")) latestByPhone[p] = s;
+        if (s.scalp_type && (!latestTypeByPhone[p] || (s.created_at || "") > (latestTypeByPhone[p].created_at || ""))) latestTypeByPhone[p] = s;
+      });
+      const latestSurveys = Object.values(latestByPhone);
+      const typeSurveys   = Object.values(latestTypeByPhone);
 
       const now = new Date();
       const thisMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
@@ -343,9 +359,12 @@ export default function Owner() {
       const reportedCount    = reportedCustomerIds.size;
       const notReportedCount = totalCustomers - reportedCount;
 
+      // 인과 보정: "리포트를 받은 뒤 다시 왔는가" — 첫 리포트 발송일 이후 방문이 있어야 재방문으로 집계
       let reportedRevisitCount = 0;
       reportedCustomerIds.forEach(cid => {
-        if ((visitsByCustomer[cid]?.length || 0) > 1) reportedRevisitCount++;
+        const cvs = visitsByCustomer[cid] || [];
+        const firstReport = cvs.find(v => v.kakao_message != null);
+        if (firstReport && cvs.some(v => v.date > firstReport.date)) reportedRevisitCount++;
       });
       const reportedRevisitRate = reportedCount > 0
         ? Math.round((reportedRevisitCount / reportedCount) * 100) : 0;
@@ -398,7 +417,7 @@ export default function Owner() {
 
       // 연령대 × 두피 고민 교차 분석 (s._cust에서 age 직접 참조)
       const ageGroupConcernsRaw = {};
-      surveys.forEach(s => {
+      latestSurveys.forEach(s => {
         if (!s.scalp_concerns) return;
         const grp = getAgeGroup(s._cust, now);
         const items = Array.isArray(s.scalp_concerns)
@@ -427,7 +446,7 @@ export default function Owner() {
         "복합 (부위별 다름)": "복합", "잘 모르겠음": "모름",
       };
       const scalpTypeRaw = {};
-      surveys.forEach(s => {
+      typeSurveys.forEach(s => {
         if (!s.scalp_type) return;
         const lbl = SCALP_TYPE_NORM[s.scalp_type] || s.scalp_type;
         scalpTypeRaw[lbl] = (scalpTypeRaw[lbl] || 0) + 1;
@@ -438,7 +457,7 @@ export default function Owner() {
 
       // ── 섹션 4: AI 인사이트 ───────────────────────────────
       const concernMap = {};
-      surveys.forEach(s => {
+      latestSurveys.forEach(s => {
         if (!s.scalp_concerns) return;
         const items = Array.isArray(s.scalp_concerns)
           ? s.scalp_concerns.filter(Boolean)
@@ -451,13 +470,13 @@ export default function Owner() {
         .map(([label, count]) => ({ label, count }));
 
       // ── 섹션 5: 만족도 통계 ─────────────────────────────
-      const q1Vals = allSatisfactions.filter(s => s.q1_report_helpful > 0).map(s => s.q1_report_helpful);
+      const q1Vals = satisfactions.filter(s => s.q1_report_helpful > 0).map(s => s.q1_report_helpful);
       const avgQ1 = q1Vals.length
         ? (q1Vals.reduce((a, b) => a + b, 0) / q1Vals.length).toFixed(1)
         : null;
 
       const q2Map = {};
-      allSatisfactions.forEach(s => {
+      satisfactions.forEach(s => {
         if (s.q2_home_care) q2Map[s.q2_home_care] = (q2Map[s.q2_home_care] || 0) + 1;
       });
       const q2TotalCount = Object.values(q2Map).reduce((a, b) => a + b, 0);
@@ -468,11 +487,29 @@ export default function Owner() {
           pct: q2TotalCount > 0 ? Math.round((count / q2TotalCount) * 100) : 0,
         }));
 
-      const q3Answered = allSatisfactions.filter(s => s.q3_revisit_intention > 0);
+      const q3Answered = satisfactions.filter(s => s.q3_revisit_intention > 0);
       const q3High = q3Answered.filter(s => s.q3_revisit_intention === 3).length;
       const revisitIntentRate = q3Answered.length > 0
         ? Math.round((q3High / q3Answered.length) * 100)
         : null;
+
+      // ── 섹션 5.5: 행동 전환 (리포트 → 실제 행동) ───────────
+      // 재방문 문진의 action_taken 기반. "성공했는가 = 행동변화" 핵심 지표.
+      const revisitSurveys = surveys.filter(s => s.visit_type === "revisit" && s.action_taken);
+      const actionAnswered = revisitSurveys.length;
+      const actionDoneList = revisitSurveys.filter(s => s.action_taken !== "못 했어요");
+      const actionDone     = actionDoneList.length;
+      const actionRate     = actionAnswered > 0 ? Math.round((actionDone / actionAnswered) * 100) : null;
+      // 실천한 고객 중 "네, 느껴져요" 응답 비율
+      const effectFelt = actionDoneList.filter(s => s.action_effect === "네, 느껴져요").length;
+      const effectRate = actionDone > 0 ? Math.round((effectFelt / actionDone) * 100) : null;
+      // 실천 방식 분포
+      const actionTypeRaw = {};
+      revisitSurveys.forEach(s => { actionTypeRaw[s.action_taken] = (actionTypeRaw[s.action_taken] || 0) + 1; });
+      const ACTION_ORDER = ["둘 다 했어요", "제품 바꿨어요", "생활 습관 바꿨어요", "못 했어요"];
+      const actionTypes = ACTION_ORDER
+        .filter(k => actionTypeRaw[k])
+        .map(k => ({ label: k, count: actionTypeRaw[k] }));
 
       const insights = [];
       if (top5Concerns.length > 0) {
@@ -501,6 +538,9 @@ export default function Owner() {
       }
       if (avgScore != null) {
         insights.push(`전체 고객 평균 두피 점수는 ${avgScore}점입니다.`);
+      }
+      if (actionAnswered > 0) {
+        insights.push(`재방문 고객 ${actionAnswered}명 중 ${actionRate}%가 지난 추천을 실천했습니다.`);
       }
 
       // ── H3 지불 실험 ─────────────────────────────────────
@@ -532,7 +572,8 @@ export default function Owner() {
 
       setData({
         kpi: { totalCustomers, visitsThisMonth, revisitRate, avgScore, avgMoisture, avgElasticity },
-        reportEffect: { reportedCount, notReportedCount, reportedRevisitRate, notReportedRevisitRate, avgDaysAfterReport, reportDiff },
+        reportEffect: { reportedCount, notReportedCount, reportedRevisitRate, notReportedRevisitRate, avgDaysAfterReport, reportDiff, reliable: reportedCount >= 5 && notReportedCount >= 3 },
+        behavior: { actionAnswered, actionDone, actionRate, effectFelt, effectRate, actionTypes },
         visitCycle: { avgGapDays, gapBuckets, totalGaps: gapDays.length },
         profile: { genderCount, ageGroupConcerns, scalpTypes },
         satisfaction: { avgQ1, q2Dist, revisitIntentRate, total: allSatisfactions.length, q3Total: q3Answered.length },
@@ -645,7 +686,7 @@ export default function Owner() {
             <Card>
               <SectionHeader
                 question="📊 리포트가 재방문을 만들고 있는가?"
-                subtitle="카카오 알림톡 발송 여부에 따른 재방문율 비교"
+                subtitle="리포트 받은 뒤 다시 온 비율 vs 안 받은 고객 (표본 적으면 참고용)"
               />
 
               {data.reportEffect.reportedCount === 0 ? (
@@ -671,20 +712,25 @@ export default function Owner() {
                     />
                   </div>
 
-                  {data.reportEffect.reportDiff > 0 && (
-                    <div style={{ background: "#edf7f1", border: "1px solid #a8d5b5", borderRadius: 8, padding: "10px 14px", marginBottom: 12 }}>
-                      <span style={{ fontSize: 13, fontWeight: 700, color: C.green }}>
-                        ✅ 리포트 발송 고객의 재방문율이 {data.reportEffect.reportDiff}%p 높습니다
-                      </span>
-                    </div>
-                  )}
-                  {data.reportEffect.reportDiff <= 0 && data.reportEffect.notReportedCount > 0 && (
+                  {!data.reportEffect.reliable ? (
                     <div style={{ background: "#fff8e6", border: `1px solid ${C.goldLight}`, borderRadius: 8, padding: "10px 14px", marginBottom: 12 }}>
                       <span style={{ fontSize: 13, fontWeight: 600, color: C.gold }}>
-                        📌 데이터가 쌓일수록 발송 효과가 뚜렷해집니다
+                        ⚠️ 표본이 적어 인과로 단정하긴 이릅니다 (받음 {data.reportEffect.reportedCount}명 · 안받음 {data.reportEffect.notReportedCount}명) — 참고용
                       </span>
                     </div>
-                  )}
+                  ) : data.reportEffect.reportDiff > 0 ? (
+                    <div style={{ background: "#edf7f1", border: "1px solid #a8d5b5", borderRadius: 8, padding: "10px 14px", marginBottom: 12 }}>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: C.green }}>
+                        ✅ 리포트 받은 뒤 재방문율이 {data.reportEffect.reportDiff}%p 높습니다
+                      </span>
+                    </div>
+                  ) : data.reportEffect.notReportedCount > 0 ? (
+                    <div style={{ background: "#fff8e6", border: `1px solid ${C.goldLight}`, borderRadius: 8, padding: "10px 14px", marginBottom: 12 }}>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: C.gold }}>
+                        📌 아직 리포트 발송군의 재방문 우위가 안 보입니다
+                      </span>
+                    </div>
+                  ) : null}
 
                   {data.reportEffect.avgDaysAfterReport != null ? (
                     <div style={{ display: "flex", alignItems: "center", gap: 14, background: C.bg, borderRadius: 10, padding: "12px 16px" }}>
@@ -858,6 +904,64 @@ export default function Owner() {
                         />
                       ))}
                     </>
+                  )}
+                </>
+              )}
+            </Card>
+
+            {/* ── 섹션 4.5: 행동 전환율 (성공 핵심 지표) ── */}
+            <Card>
+              <SectionHeader
+                question="🎯 리포트가 실제 '행동'을 만들었는가?"
+                subtitle="재방문 고객이 지난 추천을 실천했는지 — 소감의 성공 핵심 지표"
+              />
+
+              {data.behavior.actionAnswered === 0 ? (
+                <div style={{ textAlign: "center", padding: "20px 0", color: C.muted, fontSize: 13 }}>
+                  아직 재방문 문진(실천 응답) 데이터가 없습니다.
+                </div>
+              ) : (
+                <>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 16 }}>
+                    <div style={{ background: C.bg, borderRadius: 10, padding: "12px 10px", textAlign: "center" }}>
+                      <div style={{ fontSize: 10, color: C.muted, marginBottom: 4 }}>행동 전환율</div>
+                      <div style={{ fontSize: 26, fontWeight: 900, color: data.behavior.actionRate >= 50 ? C.green : C.gold }}>
+                        {data.behavior.actionRate}%
+                      </div>
+                      <div style={{ fontSize: 10, color: C.muted }}>실천함</div>
+                    </div>
+                    <div style={{ background: C.bg, borderRadius: 10, padding: "12px 10px", textAlign: "center" }}>
+                      <div style={{ fontSize: 10, color: C.muted, marginBottom: 4 }}>실천 / 응답</div>
+                      <div style={{ fontSize: 26, fontWeight: 900, color: C.text }}>
+                        {data.behavior.actionDone}<span style={{ fontSize: 14, color: C.muted }}>/{data.behavior.actionAnswered}</span>
+                      </div>
+                      <div style={{ fontSize: 10, color: C.muted }}>명</div>
+                    </div>
+                    <div style={{ background: C.bg, borderRadius: 10, padding: "12px 10px", textAlign: "center" }}>
+                      <div style={{ fontSize: 10, color: C.muted, marginBottom: 4 }}>효과 체감율</div>
+                      <div style={{ fontSize: 26, fontWeight: 900, color: C.green }}>
+                        {data.behavior.effectRate != null ? `${data.behavior.effectRate}%` : "—"}
+                      </div>
+                      <div style={{ fontSize: 10, color: C.muted }}>실천자 중</div>
+                    </div>
+                  </div>
+
+                  {data.behavior.actionTypes.length > 0 && (
+                    <>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: C.sub, marginBottom: 10 }}>실천 방식 분포</div>
+                      {data.behavior.actionTypes.map(({ label, count }) => (
+                        <MiniBar key={label} label={label} value={count}
+                          max={data.behavior.actionTypes[0].count}
+                          color={label === "못 했어요" ? C.muted : C.gold} unit="명"
+                        />
+                      ))}
+                    </>
+                  )}
+
+                  {data.behavior.actionAnswered < 5 && (
+                    <div style={{ marginTop: 12, background: "#fff8e6", border: `1px solid ${C.goldLight}`, borderRadius: 8, padding: "9px 13px", fontSize: 12, color: C.gold, fontWeight: 600 }}>
+                      ⚠️ 응답 {data.behavior.actionAnswered}건 — 표본이 쌓이면 지표가 안정됩니다
+                    </div>
                   )}
                 </>
               )}
