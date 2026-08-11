@@ -25,6 +25,16 @@ function calcAge(birthDate) {
   return age;
 }
 
+// 뒷번호가 같은 고객이 여러 명일 때, 선택 화면에 이름을 노출한다.
+// 태블릿을 고객이 들고 있을 수 있으므로 다른 고객 개인정보 보호를 위해 가운데 글자를 가린다. (예: 홍길동 → 홍*동)
+function maskName(name) {
+  if (!name) return "";
+  const n = name.trim();
+  if (n.length <= 1) return n;
+  if (n.length === 2) return n[0] + "*";
+  return n[0] + "*".repeat(n.length - 2) + n[n.length - 1];
+}
+
 const selectStyle = {
   flex: 1, padding: "12px 8px", border: `1.5px solid ${C.border}`,
   borderRadius: 10, fontSize: 16, fontFamily: "inherit",
@@ -370,7 +380,7 @@ function Survey() {
       title: "두피 고민", emoji: "🔬", desc: "신경 쓰이는 두피/모발 고민은? (복수 선택 가능)",
       content: (
         <div style={{ display: "grid", gap: 10 }}>
-          {["탈모/숱 감소", "비듬/각질", "가려움/따가움", "유분/냄새", "모발 손상/갈라짐", "특별히 없음"].map(v => (
+          {["탈모/숱 감소", "비듬/각질", "가려움/따가움", "유분/냄새", "모발 손상/갈라짐", "힐링·이완", "특별히 없음"].map(v => (
             <OptionBtn key={v} label={v} selected={form.scalp_concerns.includes(v)} onClick={() => toggleConcern(v)} />
           ))}
         </div>
@@ -534,6 +544,7 @@ function RevisitSurvey() {
     scalp_concerns: [],
   });
   const [customer, setCustomer] = useState(null);
+  const [candidates, setCandidates] = useState([]); // 뒷번호가 같은 고객이 여러 명일 때 후보 목록
   const [checking, setChecking] = useState(false);
   const [phoneChecked, setPhoneChecked] = useState(false);
   const [done, setDone] = useState(false);
@@ -550,29 +561,45 @@ function RevisitSurvey() {
     }));
   };
 
+  // 후보 한 명을 최종 선택 — 마지막 방문일 조회 후 customer 확정
+  const selectCustomer = async (found) => {
+    const { data: visits } = await supabase
+      .from("visits")
+      .select("date")
+      .eq("customer_id", found.id)
+      .order("date", { ascending: false })
+      .limit(1);
+    const lastDate = visits?.[0]?.date ?? null;
+    const daysSince = lastDate
+      ? Math.floor((new Date() - new Date(lastDate)) / 86400000)
+      : null;
+    setCustomer({ ...found, lastDate, daysSince });
+    setCandidates([]);
+  };
+
   const checkPhone = async () => {
-    if (!form.phone) return;
+    // 입력값에서 숫자만 추출 → 뒷 4자리로 조회 (뒷번호만 입력해도, 전체번호를 입력해도 동작)
+    const digits = form.phone.replace(/\D/g, "");
+    if (digits.length < 4) return;
+    const last4 = digits.slice(-4);
+
     setChecking(true);
     setPhoneChecked(false);
     setCustomer(null);
+    setCandidates([]);
+
+    // 전화번호가 last4로 끝나는 고객 조회 — 하이픈(010-...) 저장 형식과 무관하게 끝자리로 매칭
     const { data: rows } = await supabase
       .from("customers")
       .select("id, name, phone")
-      .eq("phone", form.phone)
-      .limit(1);
-    const found = rows?.[0] ?? null;
-    if (found) {
-      const { data: visits } = await supabase
-        .from("visits")
-        .select("date")
-        .eq("customer_id", found.id)
-        .order("date", { ascending: false })
-        .limit(1);
-      const lastDate = visits?.[0]?.date ?? null;
-      const daysSince = lastDate
-        ? Math.floor((new Date() - new Date(lastDate)) / 86400000)
-        : null;
-      setCustomer({ ...found, lastDate, daysSince });
+      .ilike("phone", `%${last4}`)
+      .limit(20);
+    const list = rows ?? [];
+
+    if (list.length === 1) {
+      await selectCustomer(list[0]); // 한 명이면 바로 확정
+    } else if (list.length > 1) {
+      setCandidates(list);           // 여러 명이면 선택 화면 표시
     }
     setPhoneChecked(true);
     setChecking(false);
@@ -594,8 +621,9 @@ function RevisitSurvey() {
     };
 
     // 종단 데이터: 재방문 문진도 매번 새 행으로 append (덮어쓰지 않음)
+    // phone은 입력한 뒷번호가 아니라 확정된 고객의 실제 전체번호로 저장해야 종단 연결이 유지됨
     const { data: insertedSurvey } = await supabase.from("surveys")
-      .insert({ ...surveyData, phone: form.phone })
+      .insert({ ...surveyData, phone: customer.phone })
       .select("id").single();
     const newSurveyId = insertedSurvey?.id ?? null;
 
@@ -648,22 +676,32 @@ function RevisitSurvey() {
       content: (
         <div style={{ display: "grid", gap: 16 }}>
           <div>
-            <label style={{ fontSize: 13, color: C.sub, display: "block", marginBottom: 6, fontWeight: 600 }}>전화번호</label>
+            <label style={{ fontSize: 13, color: C.sub, display: "block", marginBottom: 6, fontWeight: 600 }}>전화번호 뒷 4자리</label>
             <div style={{ display: "flex", gap: 8 }}>
               <input
                 value={form.phone}
-                onChange={e => { set("phone", e.target.value); setPhoneChecked(false); setCustomer(null); }}
+                onChange={e => { set("phone", e.target.value); setPhoneChecked(false); setCustomer(null); setCandidates([]); }}
                 onKeyDown={e => e.key === "Enter" && checkPhone()}
-                placeholder="010-0000-0000"
+                inputMode="numeric"
+                placeholder="예: 5678"
                 style={{ flex: 1, padding: "12px 16px", border: `1.5px solid ${C.border}`, borderRadius: 10, fontSize: 15, fontFamily: "inherit", outline: "none", boxSizing: "border-box" }}
               />
               <button
                 onClick={checkPhone}
-                disabled={!form.phone || checking}
-                style={{ padding: "12px 18px", borderRadius: 10, border: "none", background: form.phone && !checking ? C.gold : C.border, color: "#fff", fontSize: 14, fontWeight: 700, fontFamily: "inherit", cursor: form.phone && !checking ? "pointer" : "not-allowed", whiteSpace: "nowrap" }}
+                disabled={form.phone.replace(/\D/g, "").length < 4 || checking}
+                style={{ padding: "12px 18px", borderRadius: 10, border: "none", background: form.phone.replace(/\D/g, "").length >= 4 && !checking ? C.gold : C.border, color: "#fff", fontSize: 14, fontWeight: 700, fontFamily: "inherit", cursor: form.phone.replace(/\D/g, "").length >= 4 && !checking ? "pointer" : "not-allowed", whiteSpace: "nowrap" }}
               >{checking ? "확인 중" : "확인"}</button>
             </div>
+            <p style={{ fontSize: 12, color: C.muted, marginTop: 6 }}>전화번호 뒤 4자리만 입력하면 돼요. 같은 번호가 여러 명이면 골라주세요.</p>
           </div>
+          {phoneChecked && candidates.length > 1 && (
+            <div style={{ display: "grid", gap: 8 }}>
+              <p style={{ fontSize: 13, color: C.sub, fontWeight: 600 }}>같은 뒷번호가 {candidates.length}명 있어요. 본인을 선택해주세요.</p>
+              {candidates.map(c => (
+                <OptionBtn key={c.id} label={maskName(c.name)} selected={false} onClick={() => selectCustomer(c)} />
+              ))}
+            </div>
+          )}
           {phoneChecked && customer && (
             <div style={{ background: "#edf7f1", border: "1px solid #a8d5b5", borderRadius: 12, padding: 16 }}>
               <p style={{ fontSize: 15, fontWeight: 800, color: C.green }}>{customer.name}님, 반가워요 👋</p>
@@ -672,10 +710,10 @@ function RevisitSurvey() {
               )}
             </div>
           )}
-          {phoneChecked && !customer && (
+          {phoneChecked && !customer && candidates.length === 0 && (
             <div style={{ background: "#fff0f0", border: "1px solid #f5c0c0", borderRadius: 12, padding: 16 }}>
               <p style={{ fontSize: 14, color: C.red, fontWeight: 700 }}>등록된 고객 정보가 없어요.</p>
-              <p style={{ fontSize: 13, color: C.sub, marginTop: 4 }}>신규 문진을 작성해주세요.</p>
+              <p style={{ fontSize: 13, color: C.sub, marginTop: 4 }}>뒷번호를 다시 확인하거나, 신규 문진을 작성해주세요.</p>
             </div>
           )}
         </div>
@@ -752,7 +790,7 @@ function RevisitSurvey() {
       title: "오늘 집중할 부분", emoji: "🔍", desc: "오늘 특별히 봐줬으면 하는 부분이 있나요?",
       content: (
         <div style={{ display: "grid", gap: 10 }}>
-          {["두피 가려움", "탈모·볼륨", "두피 트러블", "건조함", "지성·냄새", "모발 손상"].map(v => (
+          {["두피 가려움", "탈모·볼륨", "두피 트러블", "건조함", "지성·냄새", "모발 손상", "힐링·이완"].map(v => (
             <OptionBtn key={v} label={v} selected={form.scalp_concerns.includes(v)} onClick={() => toggleConcern(v)} />
           ))}
         </div>
