@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { createClient } from "@supabase/supabase-js";
 
 const SHOP = { name: "소감", en: "SOGAM" };
-const STYLISTS = ["이서", "승미", "우기"];
+const STYLISTS = ["이서", "승미", "우기", "민식", "나래"];
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_KEY;
 const ANTHROPIC_KEY = import.meta.env.VITE_ANTHROPIC_KEY;
