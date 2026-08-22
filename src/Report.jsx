@@ -5,11 +5,25 @@ const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_KEY;
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
+// ── 소감(SOGAM) 디자인 토큰 ───────────────────────────────────────────────────
+// 방향: 미니멀 웰니스. 브랜드 오렌지는 '손님이 읽어야 할 것'(점수·변화·행동)에만 쓰고
+// 나머지는 무채색으로 비운다. 색을 아껴야 정작 중요한 숫자가 눈에 들어온다.
 const C = {
-  bg: "#f8f6f2", card: "#fff", border: "#ede8e0",
-  gold: "#b8965a", goldBg: "#fdf8f0", goldLight: "#d4b07a",
-  text: "#1a1a1a", sub: "#666", muted: "#999",
-  red: "#d94f4f", green: "#3a8c5c", blue: "#3a6fa8",
+  bg: "#faf9f7",        // 페이지 바탕 — 흰색보다 아주 살짝 눌러 카드가 떠 보이게
+  card: "#ffffff",
+  border: "#ece9e4",    // 헤어라인. 굵은 테두리 대신 얇은 선으로만 구분
+  track: "#f1eeea",     // 게이지·링의 빈 부분
+
+  brand: "#D9602B",     // 소감 오렌지 (CLAUDE.md 지정 브랜드 컬러)
+  brandSoft: "#fdf2ec", // 오렌지 배경 (강조 블록)
+  brandLine: "#f2cdb8", // 오렌지 테두리
+
+  text: "#17130f",
+  sub: "#5f584f",
+  muted: "#9c948a",
+  red: "#c4483c",
+  green: "#2f7d5a",
+  blue: "#3a6fa8",
 };
 
 // ── Utility helpers ──────────────────────────────────────────────────────────
@@ -36,22 +50,35 @@ function parseScoreDetail(raw) {
   try { return JSON.parse(raw); } catch { return null; }
 }
 
+// 섹션 제목 — 이모지를 늘어놓는 대신 얇은 브랜드 선 하나로 위계를 만든다.
+// 이모지가 많으면 눈이 분산돼 정작 읽어야 할 숫자가 묻힌다.
+function SectionTitle({ children, mb = 16, color }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: mb }}>
+      <span style={{ width: 14, height: 2, background: C.brand, borderRadius: 2, flexShrink: 0 }} />
+      <h3 style={{ fontSize: 15, fontWeight: 800, letterSpacing: "-0.01em", color: color || C.text }}>{children}</h3>
+    </div>
+  );
+}
+
 // ── Score ring ────────────────────────────────────────────────────────────────
 
 function ScoreRing({ score, label = "웰니스 점수" }) {
-  const color = score >= 70 ? C.green : score >= 50 ? "#b07800" : C.red;
-  const r = 54, circ = 2 * Math.PI * r;
+  // 점수 색은 브랜드 오렌지가 아니라 상태색을 쓴다.
+  // 낮은 점수를 브랜드색으로 칠하면 '좋다'는 신호로 잘못 읽힌다.
+  const color = score >= 70 ? C.green : score >= 50 ? "#c08a1c" : C.red;
+  const r = 52, circ = 2 * Math.PI * r;
   const dash = (score / 100) * circ;
   return (
     <div style={{ position: "relative", width: 140, height: 140, margin: "0 auto" }}>
       <svg width="140" height="140" style={{ transform: "rotate(-90deg)" }}>
-        <circle cx="70" cy="70" r={r} fill="none" stroke="#f0ece4" strokeWidth="12" />
-        <circle cx="70" cy="70" r={r} fill="none" stroke={color} strokeWidth="12"
+        <circle cx="70" cy="70" r={r} fill="none" stroke={C.track} strokeWidth="8" />
+        <circle cx="70" cy="70" r={r} fill="none" stroke={color} strokeWidth="8"
           strokeDasharray={`${dash} ${circ}`} strokeLinecap="round" />
       </svg>
       <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
-        <p style={{ fontSize: 36, fontWeight: 900, color, margin: 0 }}>{score}</p>
-        <p style={{ fontSize: 12, color: C.muted, margin: 0 }}>{label}</p>
+        <p style={{ fontSize: 44, fontWeight: 800, color, margin: 0, letterSpacing: "-0.03em", lineHeight: 1 }}>{score}</p>
+        <p style={{ fontSize: 10.5, color: C.muted, margin: 0, marginTop: 7, letterSpacing: "0.12em" }}>{label}</p>
       </div>
     </div>
   );
@@ -59,12 +86,12 @@ function ScoreRing({ score, label = "웰니스 점수" }) {
 
 function MetricBar({ label, value, color }) {
   return (
-    <div style={{ marginBottom: 16 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+    <div style={{ marginBottom: 18 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 7 }}>
         <span style={{ fontSize: 13, color: C.sub }}>{label}</span>
-        <span style={{ fontSize: 13, fontWeight: 700, color }}>{value}점</span>
+        <span style={{ fontSize: 14, fontWeight: 800, color, letterSpacing: "-0.01em" }}>{value}</span>
       </div>
-      <div style={{ height: 8, background: "#f0ece4", borderRadius: 99, overflow: "hidden" }}>
+      <div style={{ height: 5, background: C.track, borderRadius: 99, overflow: "hidden" }}>
         <div style={{ height: "100%", width: `${value}%`, background: color, borderRadius: 99, transition: "width 1s ease" }} />
       </div>
     </div>
@@ -88,7 +115,7 @@ function DualScoreCard({ visit, prevVisit }) {
     : "집중 케어가 필요해요 ⚠️";
 
   return (
-    <div style={{ background: C.card, borderRadius: 16, padding: 24, marginBottom: 16, border: `1px solid ${C.border}`, textAlign: "center" }}>
+    <div style={{ background: C.card, borderRadius: 14, padding: 24, marginBottom: 16, border: `1px solid ${C.border}`, textAlign: "center" }}>
       <ScoreRing score={mainScore} label={mainLabel} />
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10, marginTop: 12, flexWrap: "wrap" }}>
         {diff != null && (
@@ -112,10 +139,10 @@ function DualScoreCard({ visit, prevVisit }) {
 function DiagnosisCard({ diagnosis }) {
   if (!diagnosis) return null;
   return (
-    <div style={{ background: C.card, borderRadius: 16, padding: 24, marginBottom: 16, border: `1px solid ${C.border}` }}>
-      <h3 style={{ fontSize: 15, fontWeight: 800, marginBottom: 12 }}>🧭 오늘의 두피 진단</h3>
+    <div style={{ background: C.card, borderRadius: 14, padding: 24, marginBottom: 16, border: `1px solid ${C.border}` }}>
+      <SectionTitle mb={12}>오늘의 두피 진단</SectionTitle>
       {diagnosis.type_label && (
-        <div style={{ background: C.goldBg, borderRadius: 10, padding: "8px 14px", marginBottom: 14, fontSize: 14, fontWeight: 800, color: C.gold }}>
+        <div style={{ background: C.brandSoft, borderRadius: 10, padding: "8px 14px", marginBottom: 14, fontSize: 14, fontWeight: 800, color: C.brand }}>
           {diagnosis.type_label}
         </div>
       )}
@@ -140,17 +167,17 @@ function ScalpDetailMap({ visit }) {
     { key: '수분',    label: '두피 수분',  color: C.blue },
     { key: '모발밀도', label: '모발 밀도',  color: C.green },
     { key: '모공',    label: '모공 상태',  color: "#8B5CF6" },
-    { key: '유분',    label: '유분 균형',  color: C.gold },
+    { key: '유분',    label: '유분 균형',  color: C.brand },
     { key: '민감도',  label: '민감도',     color: C.red },
   ];
 
   if (!detail) {
     return (
-      <div style={{ background: C.card, borderRadius: 16, padding: 24, marginBottom: 16, border: `1px solid ${C.border}` }}>
-        <h3 style={{ fontSize: 15, fontWeight: 800, marginBottom: 20 }}>📊 두피 지표</h3>
+      <div style={{ background: C.card, borderRadius: 14, padding: 24, marginBottom: 16, border: `1px solid ${C.border}` }}>
+        <SectionTitle mb={20}>두피 지표</SectionTitle>
         <MetricBar label="두피 수분" value={visit.moisture} color={C.blue} />
         <MetricBar label="모발 탄력" value={visit.elasticity} color={C.green} />
-        <MetricBar label="수면 품질" value={visit.sleep}     color={C.gold} />
+        <MetricBar label="수면 품질" value={visit.sleep}     color={C.brand} />
         <MetricBar label="스트레스"  value={visit.stress}    color={C.red}  />
       </div>
     );
@@ -163,8 +190,8 @@ function ScalpDetailMap({ visit }) {
   const weakest = sorted[0];
 
   return (
-    <div style={{ background: C.card, borderRadius: 16, padding: 24, marginBottom: 16, border: `1px solid ${C.border}` }}>
-      <h3 style={{ fontSize: 15, fontWeight: 800, marginBottom: 10 }}>🗺 내 두피 지도</h3>
+    <div style={{ background: C.card, borderRadius: 14, padding: 24, marginBottom: 16, border: `1px solid ${C.border}` }}>
+      <SectionTitle mb={10}>내 두피 지도</SectionTitle>
       {available.length >= 2 && (
         <div style={{ background: "#fff8f0", border: "1px solid #f0d5b8", borderRadius: 10, padding: "9px 14px", marginBottom: 16, fontSize: 13, fontWeight: 700, color: "#8a4a1a" }}>
           ⚑ {weakest.label}({detail[weakest.key]}점)이 가장 취약 — 집중 관리 권장
@@ -193,7 +220,7 @@ function CompareSection({ current, prev }) {
 
   if (!prev) {
     return (
-      <div style={{ background: C.card, borderRadius: 16, padding: 24, marginBottom: 16, border: `1px solid ${C.border}`, textAlign: "center" }}>
+      <div style={{ background: C.card, borderRadius: 14, padding: 24, marginBottom: 16, border: `1px solid ${C.border}`, textAlign: "center" }}>
         <p style={{ fontSize: 14, fontWeight: 800, marginBottom: 8 }}>📈 방문 추이</p>
         <p style={{ fontSize: 13, color: C.muted }}>첫 방문 기록입니다.<br />다음 방문부터 변화를 확인할 수 있어요</p>
       </div>
@@ -217,9 +244,9 @@ function CompareSection({ current, prev }) {
   }
 
   return (
-    <div style={{ background: C.card, borderRadius: 16, padding: 24, marginBottom: 16, border: `1px solid ${C.border}` }}>
+    <div style={{ background: C.card, borderRadius: 14, padding: 24, marginBottom: 16, border: `1px solid ${C.border}` }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-        <h3 style={{ fontSize: 15, fontWeight: 800 }}>📈 지난 방문 대비 변화</h3>
+        <SectionTitle mb={0}>지난 방문 대비 변화</SectionTitle>
         <span style={{ fontSize: 12, color: C.muted }}>기준: {prev.date}</span>
       </div>
       <div style={{ display: "grid", gridTemplateColumns: `repeat(${metrics.length},1fr)`, gap: 8, marginBottom: 16 }}>
@@ -305,14 +332,14 @@ function BehaviorLoopCard({ visit, prevVisit, revisit }) {
     vColor = "#8a4a1a"; vBg = "#fff8f0"; resultColor = C.red;
   } else {
     verdict = "꾸준히 관리를 이어가고 계세요 👍";
-    vColor = C.gold; vBg = C.goldBg; resultColor = C.gold;
+    vColor = C.brand; vBg = C.brandSoft; resultColor = C.brand;
   }
 
   const connector = <div style={{ height: 14, borderLeft: `2px dotted ${C.border}`, marginLeft: 12 }} />;
 
   return (
-    <div style={{ background: C.card, borderRadius: 16, padding: 24, marginBottom: 16, border: `1px solid ${C.border}` }}>
-      <h3 style={{ fontSize: 15, fontWeight: 800, marginBottom: 18 }}>🔄 나의 변화 이야기</h3>
+    <div style={{ background: C.card, borderRadius: 14, padding: 24, marginBottom: 16, border: `1px solid ${C.border}` }}>
+      <SectionTitle mb={18}>나의 변화 이야기</SectionTitle>
 
       <LoopStep n="1" tag={`지난 방문 · ${prevVisit.date}`} color={C.muted}>
         {focus
@@ -321,10 +348,10 @@ function BehaviorLoopCard({ visit, prevVisit, revisit }) {
       </LoopStep>
       {connector}
 
-      <LoopStep n="2" tag="그 사이 내가 한 것" color={C.gold}>
+      <LoopStep n="2" tag="그 사이 내가 한 것" color={C.brand}>
         {didAct ? action : "이번엔 실천을 못 하셨어요"}
         {didAct && revisit?.action_effect && (
-          <span style={{ fontSize: 12, color: C.gold, fontWeight: 700 }}> · 느낀 효과: {revisit.action_effect}</span>
+          <span style={{ fontSize: 12, color: C.brand, fontWeight: 700 }}> · 느낀 효과: {revisit.action_effect}</span>
         )}
       </LoopStep>
       {connector}
@@ -360,15 +387,15 @@ function PhotoPairSection({ currentImages, prevImages, visit, prevVisit }) {
   if (!hasPrev) {
     const cols = currentImages.length === 1 ? 1 : currentImages.length <= 3 ? 3 : 3;
     return (
-      <div style={{ background: C.card, borderRadius: 16, padding: 24, marginBottom: 16, border: `1px solid ${C.border}` }}>
-        <h3 style={{ fontSize: 15, fontWeight: 800, marginBottom: 16 }}>📸 이번 방문 두피 사진</h3>
+      <div style={{ background: C.card, borderRadius: 14, padding: 24, marginBottom: 16, border: `1px solid ${C.border}` }}>
+        <SectionTitle mb={16}>이번 방문 두피 사진</SectionTitle>
         <div style={{ display: "grid", gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: 10 }}>
           {currentImages.map((url, i) => {
             const k = getAreaKey(url);
             return (
               <div key={i} style={{ textAlign: "center" }}>
                 <img src={url} alt={k ? AREA_LABELS_MAP[k] : `사진 ${i + 1}`}
-                  style={{ ...imgBase, border: `2px solid ${C.goldLight}` }} />
+                  style={{ ...imgBase, border: `2px solid ${C.brandLine}` }} />
                 <p style={{ fontSize: 10, color: C.sub, marginTop: 4, fontWeight: 600 }}>
                   {k ? AREA_LABELS_MAP[k] : `사진 ${i + 1}`}
                 </p>
@@ -384,12 +411,28 @@ function PhotoPairSection({ currentImages, prevImages, visit, prevVisit }) {
   currentImages.forEach(url => { const k = getAreaKey(url); if (k && !curMap[k]) curMap[k] = url; });
   prevImages.forEach(url => { const k = getAreaKey(url); if (k && !prevMap[k]) prevMap[k] = url; });
 
-  const orderedPairs = AREA_ORDER.filter(k => curMap[k]);
+  // 두 방문의 부위를 합집합으로 잡는다.
+  // 이번에 찍은 부위만 보면(교집합/현재 기준) 지난번엔 찍었는데 이번엔 안 찍은 부위가
+  // 화면에서 통째로 사라져, 고객은 지난 사진이 없어진 것처럼 느낀다.
+  const orderedPairs = AREA_ORDER.filter(k => curMap[k] || prevMap[k]);
   const unkeyedCur = currentImages.filter(url => !getAreaKey(url));
 
+  const missingSlot = (title, sub) => (
+    <div style={{ aspectRatio: "1", background: C.bg, borderRadius: 8, border: `1.5px dashed ${C.border}`, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4, padding: 12 }}>
+      <span style={{ fontSize: 18 }}>📷</span>
+      <p style={{ fontSize: 11, color: C.text, fontWeight: 700, textAlign: "center" }}>{title}</p>
+      <p style={{ fontSize: 10, color: C.muted, textAlign: "center", lineHeight: 1.4 }}>{sub}</p>
+    </div>
+  );
+
+  const comparable = orderedPairs.filter(k => curMap[k] && prevMap[k]).length;
+
   return (
-    <div style={{ background: C.card, borderRadius: 16, padding: 24, marginBottom: 16, border: `1px solid ${C.border}` }}>
-      <h3 style={{ fontSize: 15, fontWeight: 800, marginBottom: 16 }}>📸 두피 사진 변화</h3>
+    <div style={{ background: C.card, borderRadius: 14, padding: 24, marginBottom: 16, border: `1px solid ${C.border}` }}>
+      <SectionTitle mb={6}>두피 사진 변화</SectionTitle>
+      <p style={{ fontSize: 11, color: C.muted, marginBottom: 16 }}>
+        기록된 {orderedPairs.length}개 부위 중 {comparable}개를 나란히 비교할 수 있어요
+      </p>
 
       {orderedPairs.map(k => (
         <div key={k} style={{ marginBottom: 16 }}>
@@ -400,19 +443,16 @@ function PhotoPairSection({ currentImages, prevImages, visit, prevVisit }) {
               {prevMap[k]
                 ? <img src={prevMap[k]} alt={`이전 ${AREA_LABELS_MAP[k]}`}
                     style={{ ...imgBase, border: `1px solid ${C.border}` }} />
-                : (
-                  <div style={{ minHeight: 90, background: C.bg, borderRadius: 8, border: `1.5px dashed ${C.border}`, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4, padding: 12 }}>
-                    <span style={{ fontSize: 18 }}>📷</span>
-                    <p style={{ fontSize: 11, color: C.text, fontWeight: 700, textAlign: "center" }}>이전 방문 미촬영</p>
-                    <p style={{ fontSize: 10, color: C.muted, textAlign: "center" }}>이 부위는 이번에<br />처음 기록됩니다</p>
-                  </div>
-                )
+                : missingSlot("이전 방문 미촬영", "이 부위는 이번에 처음 기록됩니다")
               }
             </div>
             <div style={{ textAlign: "center" }}>
-              <p style={{ fontSize: 10, color: C.gold, marginBottom: 5, fontWeight: 600 }}>현재 ({visit.date})</p>
-              <img src={curMap[k]} alt={`현재 ${AREA_LABELS_MAP[k]}`}
-                style={{ ...imgBase, border: `2px solid ${C.goldLight}` }} />
+              <p style={{ fontSize: 10, color: C.brand, marginBottom: 5, fontWeight: 600 }}>현재 ({visit.date})</p>
+              {curMap[k]
+                ? <img src={curMap[k]} alt={`현재 ${AREA_LABELS_MAP[k]}`}
+                    style={{ ...imgBase, border: `2px solid ${C.brandLine}` }} />
+                : missingSlot("이번엔 미촬영", "지난 기록은 그대로 보관돼요")
+              }
             </div>
           </div>
         </div>
@@ -422,16 +462,16 @@ function PhotoPairSection({ currentImages, prevImages, visit, prevVisit }) {
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, marginTop: 8 }}>
           {unkeyedCur.map((url, i) => (
             <div key={i} style={{ textAlign: "center" }}>
-              <p style={{ fontSize: 10, color: C.gold, marginBottom: 5, fontWeight: 600 }}>현재 ({visit.date})</p>
+              <p style={{ fontSize: 10, color: C.brand, marginBottom: 5, fontWeight: 600 }}>현재 ({visit.date})</p>
               <img src={url} alt={`현재 사진 ${i + 1}`}
-                style={{ ...imgBase, border: `2px solid ${C.goldLight}` }} />
+                style={{ ...imgBase, border: `2px solid ${C.brandLine}` }} />
             </div>
           ))}
         </div>
       )}
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 16 }}>
-        {[{ label: "수분도", key: "moisture", color: C.gold }, { label: "탄력도", key: "elasticity", color: C.green }].map(m => {
+        {[{ label: "수분도", key: "moisture", color: C.brand }, { label: "탄력도", key: "elasticity", color: C.green }].map(m => {
           const diff = visit[m.key] - prevVisit[m.key];
           const diffColor = diff > 0 ? C.green : diff < 0 ? C.red : C.muted;
           const arrow = diff > 0 ? "▲" : diff < 0 ? "▼" : "─";
@@ -466,10 +506,10 @@ function ProductCard({ text, visit }) {
     : (visit.moisture != null ? [`수분도 ${visit.moisture}점`, `탄력도 ${visit.elasticity}점`] : []);
 
   return (
-    <div style={{ background: C.card, borderRadius: 16, padding: 24, marginBottom: 16, border: `1px solid ${C.border}` }}>
-      <h3 style={{ fontSize: 15, fontWeight: 800, marginBottom: 12 }}>🛁 오늘의 제품 추천</h3>
+    <div style={{ background: C.card, borderRadius: 14, padding: 24, marginBottom: 16, border: `1px solid ${C.border}` }}>
+      <SectionTitle mb={12}>오늘의 제품 추천</SectionTitle>
       {basisItems.length > 0 && (
-        <div style={{ background: C.goldBg, borderRadius: 10, padding: "8px 14px", marginBottom: 14, fontSize: 12, color: C.gold, fontWeight: 700 }}>
+        <div style={{ background: C.brandSoft, borderRadius: 10, padding: "8px 14px", marginBottom: 14, fontSize: 12, color: C.brand, fontWeight: 700 }}>
           📊 측정 기준: {basisItems.join(' · ')}
         </div>
       )}
@@ -494,13 +534,13 @@ function renderMarkdown(text) {
     if (/^분석\s*부위\s*:/.test(trimmed)) return null;
     const locMatch = trimmed.match(/^\[([^\]]+)\]$/);
     if (locMatch) {
-      return <p key={i} style={{ fontSize: 12, fontWeight: 800, color: C.gold, marginTop: 10, marginBottom: 4 }}>📍 {locMatch[1]}</p>;
+      return <p key={i} style={{ fontSize: 12, fontWeight: 800, color: C.brand, marginTop: 10, marginBottom: 4 }}>📍 {locMatch[1]}</p>;
     }
     const locInlineMatch = trimmed.match(/^\[([^\]]+)\]\s+(.+)/);
     if (locInlineMatch) {
       return (
         <p key={i} style={{ fontSize: 13, color: C.sub, lineHeight: 1.8, marginBottom: 4 }}>
-          <span style={{ fontWeight: 800, color: C.gold }}>📍 {locInlineMatch[1]}</span>
+          <span style={{ fontWeight: 800, color: C.brand }}>📍 {locInlineMatch[1]}</span>
           {' '}{locInlineMatch[2]}
         </p>
       );
@@ -509,14 +549,14 @@ function renderMarkdown(text) {
     if (headerMatch) {
       const hText = headerMatch[1].trim();
       if (!hText) return null;
-      return <p key={i} style={{ fontSize: 13, fontWeight: 800, color: C.gold, marginTop: i > 0 ? 12 : 0, marginBottom: 4 }}>{hText}</p>;
+      return <p key={i} style={{ fontSize: 13, fontWeight: 800, color: C.brand, marginTop: i > 0 ? 12 : 0, marginBottom: 4 }}>{hText}</p>;
     }
     const parts = trimmed.split('**');
     return (
       <p key={i} style={{ fontSize: 13, color: C.sub, lineHeight: 1.8, marginBottom: 2 }}>
         {parts.map((part, pi) =>
           pi % 2 === 1
-            ? <strong key={pi} style={{ fontWeight: 700, color: C.gold }}>{part}</strong>
+            ? <strong key={pi} style={{ fontWeight: 700, color: C.brand }}>{part}</strong>
             : part
         )}
       </p>
@@ -572,12 +612,12 @@ function ShareButton({ url }) {
   };
 
   return (
-    <div style={{ background: C.card, borderRadius: 16, padding: 20, marginBottom: 16, border: `1px solid ${C.border}` }}>
+    <div style={{ background: C.card, borderRadius: 14, padding: 20, marginBottom: 16, border: `1px solid ${C.border}` }}>
       <button
         onClick={handleShare}
         style={{
           width: "100%", padding: "14px", borderRadius: 12,
-          border: `1.5px solid ${C.gold}`, background: C.goldBg, color: C.gold,
+          border: `1.5px solid ${C.brand}`, background: C.brandSoft, color: C.brand,
           fontSize: 15, fontWeight: 700, fontFamily: "inherit", cursor: "pointer",
           transition: "all 0.2s",
         }}
@@ -775,19 +815,22 @@ export default function Report() {
     <div style={{ minHeight: "100vh", background: C.bg, fontFamily: "'Noto Sans KR', sans-serif", color: C.text }}>
       <style>{`@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700;900&display=swap');* { box-sizing: border-box; margin: 0; padding: 0; }`}</style>
 
-      {/* 헤더 */}
-      <div style={{ background: C.gold, padding: "24px", textAlign: "center" }}>
-        <p style={{ fontSize: 11, letterSpacing: "0.3em", color: "rgba(255,255,255,0.8)", marginBottom: 4 }}>SOGAM</p>
-        <h1 style={{ fontSize: 20, fontWeight: 900, color: "#fff" }}>두피 케어 리포트</h1>
-        <p style={{ fontSize: 12, color: "rgba(255,255,255,0.8)", marginTop: 4 }}>{visit.date} · {customer.stylist} 스타일리스트</p>
+      {/* 헤더 — 색 면을 깔지 않고 여백과 헤어라인으로 구분한다 */}
+      <div style={{ background: C.card, borderBottom: `1px solid ${C.border}`, padding: "30px 20px 24px" }}>
+        <div style={{ maxWidth: 480, margin: "0 auto" }}>
+          <p style={{ fontSize: 11, letterSpacing: "0.34em", fontWeight: 800, color: C.brand, marginBottom: 12 }}>SOGAM</p>
+          <h1 style={{ fontSize: 23, fontWeight: 800, color: C.text, letterSpacing: "-0.02em" }}>두피 웰니스 리포트</h1>
+          <p style={{ fontSize: 12.5, color: C.muted, marginTop: 7 }}>{visit.date} · {customer.stylist} 스타일리스트</p>
+        </div>
       </div>
 
       <div style={{ maxWidth: 480, margin: "0 auto", padding: "24px 20px 60px" }}>
 
-        {/* 고객 정보 */}
-        <div style={{ background: C.card, borderRadius: 16, padding: 20, marginBottom: 16, border: `1px solid ${C.border}`, textAlign: "center" }}>
-          <p style={{ fontSize: 22, fontWeight: 900, marginBottom: 4 }}>{customer.name}님</p>
-          <p style={{ fontSize: 13, color: C.muted }}>담당: {customer.stylist} · 시술: {visit.service || "두피 케어"}</p>
+        {/* 고객 정보 — 헤더에서 이어지는 인사라 카드로 감싸지 않는다.
+            담당 스타일리스트는 헤더에 이미 있어 중복을 뺐다 */}
+        <div style={{ marginBottom: 22 }}>
+          <p style={{ fontSize: 26, fontWeight: 800, letterSpacing: "-0.02em", marginBottom: 5 }}>{customer.name}님</p>
+          <p style={{ fontSize: 13, color: C.muted }}>{visit.service || "두피 케어"}</p>
         </div>
 
         {/* 1. 두피 점수 헤드라인 */}
@@ -815,10 +858,10 @@ export default function Report() {
 
         {/* 5. AI 통합 분석 (제품 섹션 제외) */}
         {analysisText && (
-          <div style={{ background: C.card, borderRadius: 16, padding: 24, marginBottom: 16, border: `1px solid ${C.border}` }}>
-            <h3 style={{ fontSize: 15, fontWeight: 800, marginBottom: 16 }}>🔬 AI 두피 분석</h3>
+          <div style={{ background: C.card, borderRadius: 14, padding: 24, marginBottom: 16, border: `1px solid ${C.border}` }}>
+            <SectionTitle mb={16}>AI 두피 분석</SectionTitle>
             {scalpParsed?.scalpType && scalpParsed.scalpType !== "분석 참조" && (
-              <p style={{ fontSize: 13, color: C.gold, fontWeight: 700, marginBottom: 12 }}>두피 타입: {scalpParsed.scalpType}</p>
+              <p style={{ fontSize: 13, color: C.brand, fontWeight: 700, marginBottom: 12 }}>두피 타입: {scalpParsed.scalpType}</p>
             )}
             <div style={{ fontSize: 13, color: C.sub, lineHeight: 1.9 }}>
               {renderMarkdown(analysisText)}
@@ -831,20 +874,20 @@ export default function Report() {
 
         {/* 메모 */}
         {visit.note && (
-          <div style={{ background: C.goldBg, borderRadius: 16, padding: 20, marginBottom: 16, border: `1px solid ${C.goldLight}` }}>
-            <h3 style={{ fontSize: 14, fontWeight: 800, marginBottom: 8, color: C.gold }}>💬 스타일리스트 메모</h3>
+          <div style={{ background: C.brandSoft, borderRadius: 14, padding: 20, marginBottom: 16, border: `1px solid ${C.brandLine}` }}>
+            <SectionTitle mb={8} color={C.brand}>스타일리스트 메모</SectionTitle>
             <p style={{ fontSize: 13, color: C.sub, lineHeight: 1.8 }}>{visit.note}</p>
           </div>
         )}
 
         {/* 만족도 */}
-        <div style={{ background: C.card, borderRadius: 16, padding: 24, marginBottom: 16, border: `1px solid ${C.border}` }}>
-          <h3 style={{ fontSize: 15, fontWeight: 800, marginBottom: 20 }}>💛 소감 남기기</h3>
+        <div style={{ background: C.card, borderRadius: 14, padding: 24, marginBottom: 16, border: `1px solid ${C.border}` }}>
+          <SectionTitle mb={20}>소감 남기기</SectionTitle>
 
           {satSubmitted ? (
             <div style={{ textAlign: "center", padding: "16px 0" }}>
               <div style={{ fontSize: 40, marginBottom: 12 }}>💛</div>
-              <p style={{ fontSize: 16, fontWeight: 800, color: C.gold, marginBottom: 6 }}>감사합니다 💛</p>
+              <p style={{ fontSize: 16, fontWeight: 800, color: C.brand, marginBottom: 6 }}>감사합니다 💛</p>
               <p style={{ fontSize: 13, color: C.muted }}>소중한 의견이 더 나은 케어로 이어집니다</p>
             </div>
           ) : (
@@ -856,14 +899,14 @@ export default function Report() {
                   {[{ v: 1, e: "😞" }, { v: 2, e: "😐" }, { v: 3, e: "😊" }, { v: 4, e: "🤩" }].map(({ v, e }) => (
                     <button key={v} onClick={() => setQ1(v)} style={{
                       width: 60, height: 60, borderRadius: 14,
-                      border: `2px solid ${q1 === v ? C.gold : C.border}`,
-                      background: q1 === v ? C.goldBg : "#fff",
+                      border: `2px solid ${q1 === v ? C.brand : C.border}`,
+                      background: q1 === v ? C.brandSoft : "#fff",
                       cursor: "pointer", display: "flex", flexDirection: "column",
                       alignItems: "center", justifyContent: "center", gap: 2,
                       transition: "all 0.15s",
                     }}>
                       <span style={{ fontSize: 24 }}>{e}</span>
-                      <span style={{ fontSize: 10, color: q1 === v ? C.gold : C.muted, fontWeight: q1 === v ? 700 : 400 }}>{v}점</span>
+                      <span style={{ fontSize: 10, color: q1 === v ? C.brand : C.muted, fontWeight: q1 === v ? 700 : 400 }}>{v}점</span>
                     </button>
                   ))}
                 </div>
@@ -876,9 +919,9 @@ export default function Report() {
                   {["샴푸 바꾸기", "두피 마사지", "수면 개선", "없어요"].map(v => (
                     <button key={v} onClick={() => setQ2(v)} style={{
                       padding: "11px 8px", borderRadius: 10, fontFamily: "inherit", fontSize: 13,
-                      border: `1.5px solid ${q2 === v ? C.gold : C.border}`,
-                      background: q2 === v ? C.goldBg : "#fff",
-                      color: q2 === v ? C.gold : C.text,
+                      border: `1.5px solid ${q2 === v ? C.brand : C.border}`,
+                      background: q2 === v ? C.brandSoft : "#fff",
+                      color: q2 === v ? C.brand : C.text,
                       fontWeight: q2 === v ? 700 : 400, cursor: "pointer", transition: "all 0.15s",
                     }}>
                       {q2 === v ? "✓ " : ""}{v}
@@ -894,9 +937,9 @@ export default function Report() {
                   {[{ v: 3, l: "네, 받아볼게요" }, { v: 2, l: "고민해볼게요" }, { v: 1, l: "아니요" }].map(({ v, l }) => (
                     <button key={v} onClick={() => setQ3(v)} style={{
                       padding: "11px 6px", borderRadius: 10, fontFamily: "inherit", fontSize: 12,
-                      border: `1.5px solid ${q3 === v ? C.gold : C.border}`,
-                      background: q3 === v ? C.goldBg : "#fff",
-                      color: q3 === v ? C.gold : C.text,
+                      border: `1.5px solid ${q3 === v ? C.brand : C.border}`,
+                      background: q3 === v ? C.brandSoft : "#fff",
+                      color: q3 === v ? C.brand : C.text,
                       fontWeight: q3 === v ? 700 : 400, cursor: "pointer", transition: "all 0.15s",
                     }}>
                       {q3 === v ? "✓ " : ""}{l}
@@ -910,13 +953,13 @@ export default function Report() {
                 disabled={!q1 || !q2 || !q3 || satSubmitting}
                 style={{
                   width: "100%", padding: "14px", borderRadius: 12, border: "none",
-                  background: (q1 && q2 && q3 && !satSubmitting) ? C.gold : C.border,
+                  background: (q1 && q2 && q3 && !satSubmitting) ? C.brand : C.border,
                   color: "#fff", fontSize: 15, fontWeight: 700, fontFamily: "inherit",
                   cursor: (q1 && q2 && q3 && !satSubmitting) ? "pointer" : "not-allowed",
                   transition: "all 0.2s",
                 }}
               >
-                {satSubmitting ? "저장 중..." : "💛 소감 남기기"}
+                {satSubmitting ? "저장 중..." : "소감 남기기"}
               </button>
             </>
           )}
@@ -926,9 +969,9 @@ export default function Report() {
         {shareUrl && <ShareButton url={shareUrl} />}
 
         {/* 하단 */}
-        <div style={{ textAlign: "center", padding: "20px 0" }}>
-          <p style={{ fontSize: 12, color: C.muted, marginBottom: 4 }}>소감</p>
-          <p style={{ fontSize: 11, color: C.muted }}>다음 방문에도 건강한 두피로 만나요 ✦</p>
+        <div style={{ textAlign: "center", padding: "28px 0 8px", borderTop: `1px solid ${C.border}`, marginTop: 8 }}>
+          <p style={{ fontSize: 11, letterSpacing: "0.34em", fontWeight: 800, color: C.brand, marginBottom: 8 }}>SOGAM</p>
+          <p style={{ fontSize: 11.5, color: C.muted }}>다음 방문에도 건강한 두피로 만나요</p>
         </div>
       </div>
     </div>
