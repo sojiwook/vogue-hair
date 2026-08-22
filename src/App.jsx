@@ -580,6 +580,9 @@ function ScalpTab({ customer, onUpdate }) {
     }
 
     const reportJson = JSON.stringify({
+      // 부위별 점수 — 지금까지 AI 호출에만 쓰고 버렸다.
+      // 리포트에서 두피 지도를 그리려면 저장이 필요하다.
+      perAreaScores,
       moisture: avg(moistures),
       elasticity: avg(elasticities),
       scalpType,

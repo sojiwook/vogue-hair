@@ -160,8 +160,9 @@ function DiagnosisCard({ diagnosis }) {
 
 // ── 2. 내 두피 지도 ─────────────────────────────────────────────────────────
 
-function ScalpDetailMap({ visit }) {
+function ScalpDetailMap({ visit, prevVisit }) {
   const detail = parseScoreDetail(visit.score_detail);
+  const prevDetail = parseScoreDetail(prevVisit?.score_detail);
 
   const ITEMS = [
     { key: '수분',    label: '두피 수분',  color: C.blue },
@@ -186,20 +187,147 @@ function ScalpDetailMap({ visit }) {
   const available = ITEMS.filter(it => typeof detail[it.key] === 'number');
   if (available.length === 0) return null;
 
-  const sorted = [...available].sort((a, b) => detail[a.key] - detail[b.key]);
-  const weakest = sorted[0];
+  // 5개를 나란히 늘어놓으면 손님은 "그래서 뭘 하라고?"가 된다.
+  // 낮은 것만 따로 묶어주면 읽을 게 2개로 줄고, 그게 곧 할 일이 된다.
+  //
+  // 절대 기준선(예: 60점 미만)은 쓰지 않는다. 실제 데이터에서 지표 대부분이
+  // 60점 아래로 나와, 기준선을 쓰면 5개가 전부 '신경 쓸 것'에 몰린다.
+  // 손님이 온통 빨간불만 보는 리포트는 다시 열어보지 않는다.
+  // 그래서 '이 손님 안에서 가장 낮은 것'을 상대적으로 집어준다.
+  const byScore = [...available].sort((a, b) => detail[a.key] - detail[b.key]);
+  const focusCount = available.length <= 2 ? 1 : 2;
+  const focus = byScore.slice(0, focusCount);
+  const keep = byScore.slice(focusCount).reverse();
+
+  // 나머지가 실제로 양호할 때만 "잘 유지되고 있어요"라고 말한다.
+  // 43점을 두고 잘 유지된다고 하면 리포트 전체의 신뢰가 깨진다.
+  const keepHealthy = keep.length > 0 && keep.every(it => detail[it.key] >= 60);
+
+  const delta = key => (typeof prevDetail?.[key] === 'number' ? detail[key] - prevDetail[key] : null);
+
+  const Row = ({ item, strong }) => {
+    const v = detail[item.key];
+    const d = delta(item.key);
+    return (
+      <div style={{ marginBottom: strong ? 14 : 12 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6 }}>
+          <span style={{ fontSize: 13.5, color: strong ? C.text : C.sub, fontWeight: strong ? 700 : 400 }}>{item.label}</span>
+          <span>
+            <span style={{ fontSize: strong ? 17 : 15, fontWeight: 800, color: item.color, letterSpacing: "-0.02em" }}>{v}</span>
+            {d !== null && (
+              <span style={{ fontSize: 11, fontWeight: 700, marginLeft: 6, color: d > 0 ? C.green : d < 0 ? C.red : C.muted }}>
+                {d > 0 ? `▲${d}` : d < 0 ? `▼${Math.abs(d)}` : "─"}
+              </span>
+            )}
+          </span>
+        </div>
+        <div style={{ height: strong ? 6 : 5, background: C.track, borderRadius: 99, overflow: "hidden" }}>
+          <div style={{ height: "100%", width: `${v}%`, background: item.color, borderRadius: 99, transition: "width 1s ease" }} />
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div style={{ background: C.card, borderRadius: 14, padding: 24, marginBottom: 16, border: `1px solid ${C.border}` }}>
-      <SectionTitle mb={10}>내 두피 지도</SectionTitle>
-      {available.length >= 2 && (
-        <div style={{ background: "#fff8f0", border: "1px solid #f0d5b8", borderRadius: 10, padding: "9px 14px", marginBottom: 16, fontSize: 13, fontWeight: 700, color: "#8a4a1a" }}>
-          ⚑ {weakest.label}({detail[weakest.key]}점)이 가장 취약 — 집중 관리 권장
+      <SectionTitle mb={4}>두피 지표</SectionTitle>
+      <p style={{ fontSize: 11.5, color: C.muted, marginBottom: 18 }}>
+        {prevDetail ? "화살표는 지난 방문과 비교한 변화예요" : "다음 방문부터 지난번과 비교해서 보여드려요"}
+      </p>
+
+      <div style={{ background: C.brandSoft, border: `1px solid ${C.brandLine}`, borderRadius: 12, padding: "16px 16px 4px", marginBottom: 18 }}>
+        <p style={{ fontSize: 12, fontWeight: 800, color: C.brand, marginBottom: 14, letterSpacing: "-0.01em" }}>
+          이번에 신경 쓰면 좋아요
+        </p>
+        {focus.map(it => <Row key={it.key} item={it} strong />)}
+      </div>
+
+      {keep.length > 0 && (
+        <div>
+          <p style={{ fontSize: 12, fontWeight: 800, color: C.sub, marginBottom: 14, letterSpacing: "-0.01em" }}>
+            {keepHealthy ? "잘 유지되고 있어요" : "함께 지켜보는 항목"}
+          </p>
+          {keep.map(it => <Row key={it.key} item={it} />)}
         </div>
       )}
-      {available.map(item => (
-        <MetricBar key={item.key} label={item.label} value={detail[item.key]} color={item.color} />
-      ))}
+    </div>
+  );
+}
+
+// ── 부위별 두피 지도 ─────────────────────────────────────────────────────────
+// 점수를 글로 나열하면 손님이 안 읽는다. 머리를 위에서 내려다본 그림에 점수를 얹으면
+// "내 정수리가 낮구나"가 한눈에 들어온다.
+
+const AREA_MAP_POS = {
+  '정수리':     { cx: 100, cy: 76,  short: '정수리' },
+  '측두부(좌)': { cx: 46,  cy: 122, short: '왼쪽' },
+  '측두부(우)': { cx: 154, cy: 122, short: '오른쪽' },
+  '후두부':     { cx: 100, cy: 170, short: '뒤쪽' },
+};
+
+function scoreTone(s) {
+  if (typeof s !== 'number') return { c: C.muted, bg: C.bg, line: C.border };
+  if (s >= 70) return { c: C.green, bg: "#eef6f1", line: "#bfdccd" };
+  if (s >= 50) return { c: "#b07a12", bg: "#fbf4e6", line: "#e6d2a6" };
+  return { c: C.red, bg: "#fbeeed", line: "#e8bfbb" };
+}
+
+function ScalpAreaMap({ scalpParsed }) {
+  const raw = Array.isArray(scalpParsed?.perAreaScores) ? scalpParsed.perAreaScores : [];
+  const byArea = {};
+  raw.forEach(a => { if (a?.label && typeof a.scalp_score === 'number') byArea[a.label] = a.scalp_score; });
+
+  // 이전 방식으로 분석된 예전 방문에는 부위별 점수가 없다. 그때는 카드를 아예 띄우지 않는다.
+  const shown = Object.keys(AREA_MAP_POS).filter(k => typeof byArea[k] === 'number');
+  if (shown.length === 0) return null;
+
+  const full = typeof byArea['전체'] === 'number' ? byArea['전체'] : null;
+
+  return (
+    <div style={{ background: C.card, borderRadius: 14, padding: 24, marginBottom: 16, border: `1px solid ${C.border}` }}>
+      <SectionTitle mb={4}>부위별 두피 점수</SectionTitle>
+      <p style={{ fontSize: 11.5, color: C.muted, marginBottom: 10 }}>머리를 위에서 내려다본 그림이에요</p>
+
+      <svg viewBox="0 0 200 216" style={{ width: "100%", maxWidth: 300, display: "block", margin: "0 auto" }}>
+        <text x="100" y="12" textAnchor="middle" fontSize="9" fill={C.muted}>앞</text>
+        <path d="M93 30 Q100 17 107 30 Z" fill="#e8e4de" />
+        <ellipse cx="100" cy="118" rx="74" ry="90" fill="#fdfcfb" stroke={C.border} strokeWidth="1.5" />
+
+        {Object.entries(AREA_MAP_POS).map(([label, pos]) => {
+          const s = byArea[label];
+          const t = scoreTone(s);
+          const has = typeof s === 'number';
+          return (
+            <g key={label}>
+              <circle cx={pos.cx} cy={pos.cy} r="21" fill={t.bg} stroke={t.line}
+                strokeWidth="1.5" strokeDasharray={has ? undefined : "3 3"} />
+              <text x={pos.cx} y={pos.cy} textAnchor="middle" dominantBaseline="central"
+                fontSize="15" fontWeight="800" fill={t.c}>{has ? s : "—"}</text>
+              <text x={pos.cx} y={pos.cy + 34} textAnchor="middle" fontSize="9.5" fill={C.muted}>{pos.short}</text>
+            </g>
+          );
+        })}
+      </svg>
+
+      <div style={{ display: "flex", justifyContent: "center", gap: 14, marginTop: 6, flexWrap: "wrap" }}>
+        {[{ l: "양호", c: C.green }, { l: "보통", c: "#b07a12" }, { l: "주의", c: C.red }].map(x => (
+          <span key={x.l} style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 10.5, color: C.muted }}>
+            <span style={{ width: 7, height: 7, borderRadius: 99, background: x.c }} />{x.l}
+          </span>
+        ))}
+      </div>
+
+      {full !== null && (
+        <p style={{ fontSize: 11.5, color: C.muted, textAlign: "center", marginTop: 12 }}>
+          전체 촬영 <span style={{ fontWeight: 800, color: scoreTone(full).c }}>{full}점</span>
+        </p>
+      )}
+
+      {shown.length < 4 && (
+        <p style={{ fontSize: 11, color: C.muted, textAlign: "center", marginTop: 10, lineHeight: 1.5 }}>
+          점선으로 표시된 곳은 이번에 촬영하지 않은 부위예요
+        </p>
+      )}
     </div>
   );
 }
@@ -862,7 +990,8 @@ export default function Report() {
         {scalpParsed?.diagnosis && <DiagnosisCard diagnosis={scalpParsed.diagnosis} />}
 
         {/* 2. 내 두피 지도 */}
-        <ScalpDetailMap visit={visit} />
+        <ScalpAreaMap scalpParsed={scalpParsed} />
+        <ScalpDetailMap visit={visit} prevVisit={prevVisit} />
 
         {/* 3. 변화 추적 */}
         <CompareSection current={visit} prev={prevVisit} />
