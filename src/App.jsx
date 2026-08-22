@@ -13,6 +13,10 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
 
 // ── 소감(SOGAM) 디자인 토큰 — Report.jsx와 동일하게 유지할 것 ────────────────
 // 색이 두 화면에서 어긋나면 같은 서비스로 안 보인다.
+// 채점 기준 버전. 기준을 바꾸면 반드시 올릴 것 —
+// 버전이 다르면 리포트에서 점수를 비교하지 않는다 (기준이 다른 자로 잰 값이라).
+const ANALYSIS_VERSION = "v2";
+
 const C = {
   bg: "#faf9f7", card: "#fff", border: "#ece9e4", track: "#f1eeea",
   brand: "#D9602B", brandSoft: "#fdf2ec", brandLine: "#f2cdb8",
@@ -613,7 +617,7 @@ function ScalpTab({ customer, onUpdate }) {
       if (!todayVisit.report_token) updatePayload.report_token = crypto.randomUUID();
       if (avgScalpScore !== null) updatePayload.scalp_score = avgScalpScore;
       if (avgScoreDetail !== null) updatePayload.score_detail = avgScoreDetail;
-      updatePayload.analysis_version = avgScalpScore !== null ? 'v1' : null;
+      updatePayload.analysis_version = avgScalpScore !== null ? ANALYSIS_VERSION : null;
       await supabase.from("visits").update(updatePayload).eq("id", todayVisit.id);
       visitId = todayVisit.id;
       savedVisit = { ...todayVisit, ...updatePayload };
@@ -632,7 +636,7 @@ function ScalpTab({ customer, onUpdate }) {
         report_token: crypto.randomUUID(),
         scalp_score: avgScalpScore,
         score_detail: avgScoreDetail,
-        analysis_version: avgScalpScore !== null ? 'v1' : null,
+        analysis_version: avgScalpScore !== null ? ANALYSIS_VERSION : null,
       }).select().single();
       if (visitInsertErr || !newVisit) {
         alert("방문 기록 저장에 실패했습니다. 다시 시도해주세요.");
@@ -781,10 +785,17 @@ function ScalpTab({ customer, onUpdate }) {
 }
 
 function CompareSection({ current, prev, compact = false }) {
+  // 채점 기준(analysis_version)이 다르면 AI가 매긴 수분도·탄력도는 비교할 수 없다.
+  // 다른 자로 잰 값을 나란히 두면 직원이 손님에게 잘못된 개선/악화를 말하게 된다.
+  const aiComparable = !!prev &&
+    (current?.analysis_version ?? null) === (prev?.analysis_version ?? null);
+
   const metrics = [
     { key: "score",      label: "종합 점수",  higherIsBetter: true },
-    { key: "moisture",   label: "수분도",      higherIsBetter: true },
-    { key: "elasticity", label: "탄력도",      higherIsBetter: true },
+    ...(aiComparable ? [
+      { key: "moisture",   label: "수분도",      higherIsBetter: true },
+      { key: "elasticity", label: "탄력도",      higherIsBetter: true },
+    ] : []),
     { key: "sleep",      label: "수면 품질",   higherIsBetter: true },
     { key: "stress",     label: "스트레스",    higherIsBetter: false },
   ];

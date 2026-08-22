@@ -334,14 +334,18 @@ function ScalpAreaMap({ scalpParsed }) {
 
 // ── 3. 변화 추적 ─────────────────────────────────────────────────────────────
 
-function CompareSection({ current, prev }) {
-  const hasScalp = current.scalp_score != null && prev?.scalp_score != null;
+function CompareSection({ current, prev, aiComparable = true }) {
+  // scalp_score / moisture / elasticity 는 AI 채점 결과라 기준 버전이 다르면 비교할 수 없다.
+  // 반면 웰니스 점수 / 수면 / 스트레스는 문진 기반이라 채점 기준과 무관하게 비교된다.
+  const hasScalp = aiComparable && current.scalp_score != null && prev?.scalp_score != null;
 
   const metrics = [
     ...(hasScalp ? [{ key: "scalp_score", label: "두피",    higherIsBetter: true }] : []),
     { key: "score",      label: "웰니스",   higherIsBetter: true  },
-    { key: "moisture",   label: "수분도",   higherIsBetter: true  },
-    { key: "elasticity", label: "탄력도",   higherIsBetter: true  },
+    ...(aiComparable ? [
+      { key: "moisture",   label: "수분도",   higherIsBetter: true  },
+      { key: "elasticity", label: "탄력도",   higherIsBetter: true  },
+    ] : []),
     { key: "sleep",      label: "수면",     higherIsBetter: true  },
     { key: "stress",     label: "스트레스", higherIsBetter: false },
   ];
@@ -916,6 +920,13 @@ export default function Report() {
 
   const { customer, visit, prevVisit } = data;
 
+  // 채점 기준(analysis_version)이 다르면 점수를 나란히 두면 안 된다.
+  // 다른 자로 잰 값이라, 개선/악화를 반대로 알려줄 수 있다.
+  // 사진 비교는 채점과 무관하므로 그대로 유지한다.
+  const versionChanged = !!prevVisit &&
+    (visit.analysis_version ?? null) !== (prevVisit.analysis_version ?? null);
+  const comparablePrev = versionChanged ? null : prevVisit;
+
   // ?phone= 링크를 그대로 공유하면 전화번호가 상대방 대화방에 남는다 → 토큰 링크만 공유한다
   const shareUrl = visit.report_token
     ? `${window.location.origin}${window.location.pathname}?token=${visit.report_token}`
@@ -981,20 +992,32 @@ export default function Report() {
         </div>
 
         {/* 1. 두피 점수 헤드라인 */}
-        <DualScoreCard visit={visit} prevVisit={prevVisit} />
+        <DualScoreCard visit={visit} prevVisit={comparablePrev} />
+
+        {/* 채점 기준이 바뀐 방문에만 뜬다. 손님이 "점수가 왜 갑자기 달라졌지?" 하지 않도록 미리 설명한다 */}
+        {versionChanged && (
+          <div style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 12, padding: "14px 16px", marginBottom: 16 }}>
+            <p style={{ fontSize: 12.5, color: C.sub, lineHeight: 1.75 }}>
+              이번 방문부터 두피 점수를 더 정밀한 기준으로 매기고 있어요.
+              기준이 달라져서 지난 방문 점수와는 나란히 비교하지 않았습니다.
+              사진 비교는 그대로 보실 수 있어요.
+            </p>
+          </div>
+        )}
+
 
         {/* 🔄 나의 변화 이야기 (행동 → 몸의 변화) */}
-        <BehaviorLoopCard visit={visit} prevVisit={prevVisit} revisit={revisit} />
+        <BehaviorLoopCard visit={visit} prevVisit={comparablePrev} revisit={revisit} />
 
         {/* 🧭 오늘의 두피 진단 */}
         {scalpParsed?.diagnosis && <DiagnosisCard diagnosis={scalpParsed.diagnosis} />}
 
         {/* 2. 내 두피 지도 */}
         <ScalpAreaMap scalpParsed={scalpParsed} />
-        <ScalpDetailMap visit={visit} prevVisit={prevVisit} />
+        <ScalpDetailMap visit={visit} prevVisit={comparablePrev} />
 
         {/* 3. 변화 추적 */}
-        <CompareSection current={visit} prev={prevVisit} />
+        <CompareSection current={visit} prev={prevVisit} aiComparable={!versionChanged} />
 
         {/* 4. 사진 비교 (부위 쌍) */}
         <PhotoPairSection
