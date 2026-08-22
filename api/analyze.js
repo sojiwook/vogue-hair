@@ -32,8 +32,10 @@ export default async function handler(req, res) {
 
   try {
     const { image, prompt, customerInfo } = req.body;
-    console.log('[analyze] 요청 수신 — customer:', customerInfo?.name, customerInfo?.age,
-      '| concerns:', customerInfo?.concerns,
+    // 로그에는 개인정보를 남기지 않는다 (개인정보보호법 · CLAUDE.md 6장).
+    // 실명·나이·고민을 함께 남기면 특정 개인이 식별된다. 장애 추적은
+    // Vercel이 요청마다 자동으로 붙이는 Request ID와 시각으로 충분하다.
+    console.log('[analyze] 요청 수신 — 부위:', customerInfo?.label ?? '미지정',
       '| 이미지 포함:', !!image?.data,
       '| 이미지 크기(chars):', image?.data?.length ?? 0);
 
