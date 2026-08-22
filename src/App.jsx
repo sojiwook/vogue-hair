@@ -15,7 +15,7 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
 // 색이 두 화면에서 어긋나면 같은 서비스로 안 보인다.
 // 채점 기준 버전. 기준을 바꾸면 반드시 올릴 것 —
 // 버전이 다르면 리포트에서 점수를 비교하지 않는다 (기준이 다른 자로 잰 값이라).
-const ANALYSIS_VERSION = "v2";
+const ANALYSIS_VERSION = "v3";
 
 const C = {
   bg: "#faf9f7", card: "#fff", border: "#ece9e4", track: "#f1eeea",
@@ -56,7 +56,11 @@ async function callAI(prompt, imgBase64, imgType, onChunk, label, customerName, 
   }
 
   onChunk(data.result || "");
-  return { scalp_score: data.scalp_score ?? null, score_detail: data.score_detail ?? null };
+  return {
+    scalp_score: data.scalp_score ?? null,
+    score_detail: data.score_detail ?? null,
+    score_basis: data.score_basis ?? null,
+  };
 }
 
 function Btn({ children, onClick, variant = "primary", size = "md", disabled, full, style = {} }) {
@@ -460,7 +464,8 @@ function ScalpTab({ customer, onUpdate }) {
         i === idx
           ? { ...im, analyzing: false, done: true,
               scalp_score: scoreResult?.scalp_score ?? null,
-              score_detail: scoreResult?.score_detail ?? null }
+              score_detail: scoreResult?.score_detail ?? null,
+              score_basis: scoreResult?.score_basis ?? null }
           : im
       ));
     } catch (e) {
@@ -505,10 +510,36 @@ function ScalpTab({ customer, onUpdate }) {
       return Object.keys(result).length > 0 ? result : null;
     })();
 
-    const moistures = completedImages.map(im => extractNum(im.report, /두피\s*수분도[^\d]*(\d+)/)).filter(v => v !== null);
-    const elasticities = completedImages.map(im => extractNum(im.report, /모낭\s*건강도[^\d]*(\d+)/)).filter(v => v !== null);
-    const avgMoisture = moistures.length > 0 ? avg(moistures) : null;
-    const avgElasticity = elasticities.length > 0 ? avg(elasticities) : null;
+    // 지표별 판단 근거를 한 줄씩 고른다.
+    // 리포트에는 부위 평균 점수가 나가므로, 그 점수가 낮아진 이유를 가장 잘 설명하는
+    // '가장 낮은 부위'의 근거를 쓴다. 어느 부위를 본 것인지도 같이 남겨야
+    // 스타일리스트가 해당 사진과 대조할 수 있다.
+    const avgScoreBasis = (() => {
+      const picked = {};
+      for (const k of detailKeys) {
+        let best = null;
+        for (const im of completedImages) {
+          const text = im.score_basis?.[k];
+          const val = im.score_detail?.[k];
+          if (typeof text !== 'string' || !text.trim()) continue;
+          if (typeof val !== 'number') continue;
+          if (!best || val < best.score) best = { score: val, text: text.trim(), area: im.label };
+        }
+        if (best) picked[k] = { text: best.text, area: best.area };
+      }
+      return Object.keys(picked).length > 0 ? picked : null;
+    })();
+
+    // 수분도는 AI가 [SCORE]로 이미 정확히 주는 값을 쓴다.
+    // 예전에는 분석 글에서 "두피 수분도 N"이라는 문구를 정규식으로 긁어냈는데,
+    // 절반(47%)만 걸리고 나머지는 기본값으로 떨어졌다. 글을 파싱할 이유가 없다.
+    const avgMoisture = avgScoreDetail?.수분 ?? null;
+
+    // 탄력도는 AI가 판단하지 않는다.
+    // 예전 코드는 "모낭 건강도 N"을 찾았지만 프롬프트가 그 말을 쓰라고 한 적이 없어
+    // 실제로는 78%가 기본값 50이었다 — 재는 척만 하고 있었다.
+    // 모발 탄력은 만져봐야 아는 값이라 스타일리스트가 직접 입력한 값만 신뢰한다.
+    // (탄력도 변수 없음 — 저장 시 덮어쓰지 않는다)
 
     const firstReport = completedImages[0].report;
     const SCALP_TYPES = ["건성", "지성", "복합성", "민감성", "정상", "예민"];
@@ -583,12 +614,40 @@ function ScalpTab({ customer, onUpdate }) {
       }
     }
 
+    // 수면·스트레스는 문진에서만 나오는 값이다.
+    // 예전에는 문진이 없어도 50/50을 적어 측정한 것처럼 보이게 했고,
+    // 웰니스 점수는 아예 51로 고정돼 있었다.
+    // 이제 문진이 있을 때만 실제 값을 쓰고, 없으면 그 사실을 리포트에 알려
+    // 해당 지표를 감추게 한다 (없는 숫자를 보여주지 않는다).
+    const sleepScale = { "5시간 이하": 30, "5~6시간": 50, "6~7시간": 70, "7시간 이상": 85 };
+    const { data: svRows } = await supabase
+      .from("surveys")
+      .select("sleep, stress")
+      .eq("phone", customer.phone)
+      .order("created_at", { ascending: false })
+      .limit(1);
+    const sv = svRows?.[0] ?? null;
+    const surveySleep = sv?.sleep ? (sleepScale[sv.sleep] ?? null) : null;
+    const surveyStress = typeof sv?.stress === 'number' ? sv.stress * 20 : null;
+    const surveyBacked = surveySleep !== null && surveyStress !== null;
+
+    // 웰니스 점수는 문진 기반 지표로만 계산한다.
+    // 예전 공식은 두피 수분도·탄력도를 60% 비중으로 섞었는데, 그러면 두피 점수를
+    // 두 번 세는 셈이고 탄력도는 실제로 측정되지도 않던 값이었다.
+    const wellnessScore = surveyBacked
+      ? Math.round(surveySleep * 0.5 + (100 - surveyStress) * 0.5)
+      : null;
+
     const reportJson = JSON.stringify({
       // 부위별 점수 — 지금까지 AI 호출에만 쓰고 버렸다.
       // 리포트에서 두피 지도를 그리려면 저장이 필요하다.
       perAreaScores,
-      moisture: avg(moistures),
-      elasticity: avg(elasticities),
+      // AI가 판단한 근거 — 각 점수를 왜 그렇게 매겼는지 스타일리스트가 사진과 대조할 수 있다
+      scoreBasis: avgScoreBasis,
+      // 수면·스트레스·웰니스 점수가 실제 문진에서 나온 값인지 표시. false면 리포트가 감춘다.
+      surveyBacked,
+      moisture: avgMoisture,
+      // 탄력도는 AI가 판단하지 않는다 (위 설명 참고). 스타일리스트 입력값만 방문 기록에 남는다.
       scalpType,
       concerns,
       diagnosis: diagnosisData,
@@ -613,7 +672,10 @@ function ScalpTab({ customer, onUpdate }) {
     if (todayVisit) {
       const updatePayload = { scalp_report: reportJson };
       if (avgMoisture !== null) updatePayload.moisture = avgMoisture;
-      if (avgElasticity !== null) updatePayload.elasticity = avgElasticity;
+      if (surveySleep !== null) updatePayload.sleep = surveySleep;
+      if (surveyStress !== null) updatePayload.stress = surveyStress;
+      if (wellnessScore !== null) updatePayload.score = wellnessScore;
+      // 탄력도는 AI가 판단하지 않으므로 여기서 덮어쓰지 않는다 (스타일리스트 입력값 보존)
       if (!todayVisit.report_token) updatePayload.report_token = crypto.randomUUID();
       if (avgScalpScore !== null) updatePayload.scalp_score = avgScalpScore;
       if (avgScoreDetail !== null) updatePayload.score_detail = avgScoreDetail;
@@ -627,11 +689,13 @@ function ScalpTab({ customer, onUpdate }) {
         customer_id: customer.id,
         date: today,
         service: "두피 케어",
-        sleep: 50,
-        stress: 50,
+        // 문진이 없으면 아래 기본값이 들어가지만 surveyBacked=false 로 기록되므로
+        // 리포트에서는 수면·스트레스·웰니스 점수를 아예 보여주지 않는다.
+        sleep: surveySleep ?? 50,
+        stress: surveyStress ?? 50,
         moisture: avgMoisture ?? 55,
-        elasticity: avgElasticity ?? 50,
-        score: 51,
+        elasticity: 50,
+        score: wellnessScore ?? 51,
         scalp_report: reportJson,
         report_token: crypto.randomUUID(),
         scalp_score: avgScalpScore,

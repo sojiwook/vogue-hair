@@ -98,11 +98,42 @@ function MetricBar({ label, value, color }) {
   );
 }
 
+// ── 점수 등급 ────────────────────────────────────────────────────────────────
+// 68점이라는 숫자만으로는 좋은지 나쁜지 알 수 없다.
+// AI가 채점할 때 쓰는 기준(api/analyze.js 의 점수 기준 v2)과 같은 구간을 써야
+// 화면과 채점이 어긋나지 않는다. 기준을 바꾸면 양쪽을 함께 바꿀 것.
+const GRADES = [
+  { min: 90, label: "매우 좋음", color: "#1f7a52" },
+  { min: 75, label: "좋음",      color: C.green },
+  { min: 60, label: "보통",      color: "#8a7320" },
+  { min: 45, label: "관리 필요",  color: "#b0611a" },
+  { min: 25, label: "집중 관리",  color: C.red },
+  { min: 0,  label: "매우 취약",  color: "#9c2f26" },
+];
+
+function gradeOf(score) {
+  return GRADES.find(g => score >= g.min) ?? GRADES[GRADES.length - 1];
+}
+
+// 0~100 위에서 이 점수가 어디쯤인지 보여주는 눈금.
+// 숫자 옆에 위치가 같이 보여야 "68이 어느 정도인지"가 감으로 잡힌다.
+function GradeScale({ value, color }) {
+  return (
+    <div style={{ position: "relative", height: 5, background: C.track, borderRadius: 99 }}>
+      {[45, 60, 75].map(t => (
+        <span key={t} style={{ position: "absolute", left: `${t}%`, top: -2, width: 1, height: 9, background: "#ddd8d1" }} />
+      ))}
+      <div style={{ position: "absolute", left: 0, top: 0, height: 5, width: `${value}%`, background: color, borderRadius: 99, transition: "width 1s ease" }} />
+      <span style={{ position: "absolute", left: `${value}%`, top: -3.5, width: 12, height: 12, marginLeft: -6, borderRadius: 99, background: "#fff", border: `3px solid ${color}` }} />
+    </div>
+  );
+}
+
 // ── 1. 두피 점수 헤드라인 ───────────────────────────────────────────────────
 
-function DualScoreCard({ visit, prevVisit }) {
+function DualScoreCard({ visit, prevVisit, surveyBacked = true }) {
   const scalpScore = visit.scalp_score != null ? Number(visit.scalp_score) : null;
-  const wellnessScore = visit.score;
+  const wellnessScore = surveyBacked ? visit.score : null;
   const prevScalp = prevVisit?.scalp_score != null ? Number(prevVisit.scalp_score) : null;
   const diff = (scalpScore != null && prevScalp != null) ? scalpScore - prevScalp : null;
   const diffColor = diff == null ? C.muted : diff > 0 ? C.green : diff < 0 ? C.red : C.muted;
@@ -123,7 +154,7 @@ function DualScoreCard({ visit, prevVisit }) {
             {diff > 0 ? `▲${diff}` : diff < 0 ? `▼${Math.abs(diff)}` : "─"} 지난 방문 대비
           </span>
         )}
-        {scalpScore != null && (
+        {scalpScore != null && wellnessScore != null && (
           <span style={{ fontSize: 12, color: C.muted, background: C.bg, borderRadius: 99, padding: "3px 10px" }}>
             웰니스 {wellnessScore}점
           </span>
@@ -160,7 +191,12 @@ function DiagnosisCard({ diagnosis }) {
 
 // ── 2. 내 두피 지도 ─────────────────────────────────────────────────────────
 
-function ScalpDetailMap({ visit, prevVisit }) {
+function ScalpDetailMap({ visit, prevVisit, scalpParsed }) {
+  // 등급 라벨은 v3 채점 기준으로 매겨진 점수에만 붙인다.
+  // v1 점수는 기준 자체가 달라(평균 45점대) 같은 등급표를 대면 온통 "집중 관리"가 된다.
+  const graded = visit.analysis_version === "v3";
+  // AI가 각 점수를 왜 그렇게 매겼는지 (없을 수도 있는 선택 항목)
+  const basis = (scalpParsed && typeof scalpParsed.scoreBasis === "object") ? scalpParsed.scoreBasis : null;
   const detail = parseScoreDetail(visit.score_detail);
   const prevDetail = parseScoreDetail(prevVisit?.score_detail);
 
@@ -208,12 +244,17 @@ function ScalpDetailMap({ visit, prevVisit }) {
   const Row = ({ item, strong }) => {
     const v = detail[item.key];
     const d = delta(item.key);
+    // 등급을 못 붙이는 예전 데이터는 지표 고유 색을 그대로 쓴다
+    const g = graded ? gradeOf(v) : { label: null, color: item.color };
+    const b = basis?.[item.key];
     return (
-      <div style={{ marginBottom: strong ? 14 : 12 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6 }}>
+      <div style={{ marginBottom: strong ? 18 : 15 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 7 }}>
           <span style={{ fontSize: 13.5, color: strong ? C.text : C.sub, fontWeight: strong ? 700 : 400 }}>{item.label}</span>
           <span>
-            <span style={{ fontSize: strong ? 17 : 15, fontWeight: 800, color: item.color, letterSpacing: "-0.02em" }}>{v}</span>
+            {/* 숫자 옆에 등급을 붙인다. 68이라는 숫자만으로는 좋은지 나쁜지 알 수 없다 */}
+            {g.label && <span style={{ fontSize: 11.5, fontWeight: 700, color: g.color, marginRight: 7 }}>{g.label}</span>}
+            <span style={{ fontSize: strong ? 17 : 15, fontWeight: 800, color: g.color, letterSpacing: "-0.02em" }}>{v}</span>
             {d !== null && (
               <span style={{ fontSize: 11, fontWeight: 700, marginLeft: 6, color: d > 0 ? C.green : d < 0 ? C.red : C.muted }}>
                 {d > 0 ? `▲${d}` : d < 0 ? `▼${Math.abs(d)}` : "─"}
@@ -221,9 +262,12 @@ function ScalpDetailMap({ visit, prevVisit }) {
             )}
           </span>
         </div>
-        <div style={{ height: strong ? 6 : 5, background: C.track, borderRadius: 99, overflow: "hidden" }}>
-          <div style={{ height: "100%", width: `${v}%`, background: item.color, borderRadius: 99, transition: "width 1s ease" }} />
-        </div>
+        <GradeScale value={v} color={g.color} />
+        {b?.text && (
+          <p style={{ fontSize: 11, color: C.muted, marginTop: 7, lineHeight: 1.5 }}>
+            {b.text}{b.area ? ` · ${b.area} 기준` : ""}
+          </p>
+        )}
       </div>
     );
   };
@@ -334,20 +378,22 @@ function ScalpAreaMap({ scalpParsed }) {
 
 // ── 3. 변화 추적 ─────────────────────────────────────────────────────────────
 
-function CompareSection({ current, prev, aiComparable = true }) {
+function CompareSection({ current, prev, aiComparable = true, surveyBacked = true }) {
   // scalp_score / moisture / elasticity 는 AI 채점 결과라 기준 버전이 다르면 비교할 수 없다.
   // 반면 웰니스 점수 / 수면 / 스트레스는 문진 기반이라 채점 기준과 무관하게 비교된다.
   const hasScalp = aiComparable && current.scalp_score != null && prev?.scalp_score != null;
 
+  // 문진이 없으면 수면·스트레스·웰니스 점수는 실제 값이 아니라 기본값이므로 비교 대상에서 뺀다.
   const metrics = [
     ...(hasScalp ? [{ key: "scalp_score", label: "두피",    higherIsBetter: true }] : []),
-    { key: "score",      label: "웰니스",   higherIsBetter: true  },
+    ...(surveyBacked ? [{ key: "score", label: "웰니스", higherIsBetter: true }] : []),
     ...(aiComparable ? [
       { key: "moisture",   label: "수분도",   higherIsBetter: true  },
-      { key: "elasticity", label: "탄력도",   higherIsBetter: true  },
     ] : []),
-    { key: "sleep",      label: "수면",     higherIsBetter: true  },
-    { key: "stress",     label: "스트레스", higherIsBetter: false },
+    ...(surveyBacked ? [
+      { key: "sleep",      label: "수면",     higherIsBetter: true  },
+      { key: "stress",     label: "스트레스", higherIsBetter: false },
+    ] : []),
   ];
 
   if (!prev) {
@@ -359,7 +405,8 @@ function CompareSection({ current, prev, aiComparable = true }) {
     );
   }
 
-  const scoreDiff = current.score - prev.score;
+  // 문진이 없으면 웰니스 점수는 기본값이라 증감을 계산해도 의미가 없다.
+  const scoreDiff = surveyBacked ? (current.score - prev.score) : 0;
   const scalpDiff = hasScalp ? Number(current.scalp_score) - Number(prev.scalp_score) : null;
 
   let verdictText, verdictColor;
@@ -370,9 +417,11 @@ function CompareSection({ current, prev, aiComparable = true }) {
     verdictText = "변화 없음";
     verdictColor = C.muted;
   } else {
-    const improving = (scalpDiff != null ? scalpDiff : 0) + scoreDiff > 0;
-    verdictText = improving ? "전반적으로 개선되고 있어요 👍" : "관리가 필요한 시점이에요 ⚠️";
-    verdictColor = improving ? C.green : C.red;
+    const total = (scalpDiff != null ? scalpDiff : 0) + scoreDiff;
+    if (total === 0) { verdictText = "변화 없음"; verdictColor = C.muted; }
+    const improving = total > 0;
+    if (total !== 0) verdictText = improving ? "전반적으로 개선되고 있어요 👍" : "관리가 필요한 시점이에요 ⚠️";
+    if (total !== 0) verdictColor = improving ? C.green : C.red;
   }
 
   return (
@@ -927,6 +976,10 @@ export default function Report() {
     (visit.analysis_version ?? null) !== (prevVisit.analysis_version ?? null);
   const comparablePrev = versionChanged ? null : prevVisit;
 
+  // 문진이 없으면 수면·스트레스·웰니스 점수는 실제 값이 아니라 기본값이다.
+  // 없는 숫자를 보여주느니 항목 자체를 감춘다.
+  const surveyBacked = scalpParsed?.surveyBacked !== false;
+
   // ?phone= 링크를 그대로 공유하면 전화번호가 상대방 대화방에 남는다 → 토큰 링크만 공유한다
   const shareUrl = visit.report_token
     ? `${window.location.origin}${window.location.pathname}?token=${visit.report_token}`
@@ -992,7 +1045,7 @@ export default function Report() {
         </div>
 
         {/* 1. 두피 점수 헤드라인 */}
-        <DualScoreCard visit={visit} prevVisit={comparablePrev} />
+        <DualScoreCard visit={visit} prevVisit={comparablePrev} surveyBacked={surveyBacked} />
 
         {/* 채점 기준이 바뀐 방문에만 뜬다. 손님이 "점수가 왜 갑자기 달라졌지?" 하지 않도록 미리 설명한다 */}
         {versionChanged && (
@@ -1014,10 +1067,10 @@ export default function Report() {
 
         {/* 2. 내 두피 지도 */}
         <ScalpAreaMap scalpParsed={scalpParsed} />
-        <ScalpDetailMap visit={visit} prevVisit={comparablePrev} />
+        <ScalpDetailMap visit={visit} prevVisit={comparablePrev} scalpParsed={scalpParsed} />
 
         {/* 3. 변화 추적 */}
-        <CompareSection current={visit} prev={prevVisit} aiComparable={!versionChanged} />
+        <CompareSection current={visit} prev={prevVisit} aiComparable={!versionChanged} surveyBacked={surveyBacked} />
 
         {/* 4. 사진 비교 (부위 쌍) */}
         <PhotoPairSection
