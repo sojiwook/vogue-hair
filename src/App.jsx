@@ -23,7 +23,8 @@ async function callAI(prompt, imgBase64, imgType, onChunk, label, customerName, 
   const body = {
     prompt,
     image: imgBase64 ? { data: imgBase64, mimeType: imgType || "image/jpeg" } : null,
-    customerInfo: fullCustomerInfo || { label: label || "두피", name: customerName || "고객", age: customerAge || 0 },
+    // 실명은 AI 분석에 필요하지 않다 — 서버로 보내지 않는다 (개인정보 국외이전 최소화)
+    customerInfo: fullCustomerInfo || { label: label || "두피", age: customerAge || 0 },
   };
   const res = await fetch("/api/analyze", {
     method: "POST",
@@ -404,7 +405,7 @@ function ScalpTab({ customer, onUpdate }) {
       : (customer.age || 0);
 
     const customerInfoFull = {
-      name: customer.name,
+      // name 제외 — 리포트 화면에서 붙인다
       age: currentAge,
       label: img.label,
       sleep: surveyData?.sleep ? (sleepMap[surveyData.sleep] ?? 50) : 50,
@@ -519,7 +520,7 @@ function ScalpTab({ customer, onUpdate }) {
       try {
         const diagInfo = {
           purpose: 'diagnosis_synthesis',
-          name: customer.name,
+          // name 제외 — 리포트 화면에서 붙인다
           perAreaScores,
           avgScoreDetail,
         };
@@ -545,7 +546,7 @@ function ScalpTab({ customer, onUpdate }) {
         const hasIntakeData = Array.isArray(latestSurvey?.scalp_concerns) && latestSurvey.scalp_concerns.length > 0;
         const synthInfo = {
           purpose: 'product_synthesis',
-          name: customer.name,
+          // name 제외 — 리포트 화면에서 붙인다
           hasIntakeData,
           concerns: hasIntakeData ? latestSurvey.scalp_concerns.join(', ') : null,
           scalpType: latestSurvey?.scalp_type || '미기재',

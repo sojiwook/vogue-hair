@@ -40,7 +40,8 @@ export default async function handler(req, res) {
       '| 이미지 크기(chars):', image?.data?.length ?? 0);
 
     const buildPrompt = (ci) => {
-      if (!ci?.name) return null;
+      // 실명은 분석에 쓰지 않으므로 이름 유무로 판단하지 않는다 (개인정보 최소수집)
+      if (!ci) return null;
 
       // 종합 진단 합성 (이미지 없음, 전 부위 점수 기반 → JSON 반환)
       if (ci.purpose === 'diagnosis_synthesis') {
@@ -187,7 +188,7 @@ ${prevSection}
 아래 고객 정보와 두피 사진을 토대로, 신뢰감 있는 전문 소견을 작성해주세요.
 
 [고객 정보]
-- 이름: ${ci.name} (${ci.age}세)
+- 나이: ${ci.age}세
 - 수면 품질: ${sleepLbl} (${ci.sleep}/100${sleepChg})
 - 스트레스 수준: ${stressLbl} (${ci.stress}/100${stressChg}) ← 높을수록 스트레스 많음
 - 두피 고민: ${ci.concerns}
@@ -268,7 +269,7 @@ ${ci.visit_type === "revisit" ? `- 재방문 고객이므로 지난 방문과의
 
 아래 형식으로 작성해주세요:
 
-## 두피 분석 - ${ci.name}님
+## 두피 분석
 
 ## 🔬 두피 타입 & 지형
 (두피 타입 판단 1문장)
@@ -310,7 +311,7 @@ N은 각각 0~100 정수. scalp_score는 두피 종합 점수.`;
       (customerInfo?.purpose !== undefined || customerInfo?.concerns !== undefined)
         ? buildPrompt(customerInfo)
         : null
-    ) || prompt || `두피 전문 AI. ${customerInfo?.name}님의 두피 이미지를 분析해주세요. 한국어로 응답.`;
+    ) || prompt || `두피 전문 AI. 고객의 두피 이미지를 분석해주세요. 한국어로 응답.`;
 
     // buildPrompt가 { system, userText } 객체 or 문자열을 반환
     let systemText = null;
