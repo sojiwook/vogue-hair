@@ -661,11 +661,14 @@ export default function Report() {
 
     const load = async () => {
       if (token) {
-        const { data: visit } = await supabase
+        // .single()은 결과가 정확히 1행이 아니면 조회 자체를 실패로 만든다.
+        // 토큰이 중복될 일은 거의 없지만, 그때 리포트가 통째로 안 열리는 건 과한 대가다.
+        const { data: tokenVisits } = await supabase
           .from("visits")
           .select("*")
           .eq("report_token", token)
-          .single();
+          .limit(1);
+        const visit = tokenVisits?.[0] ?? null;
 
         if (!visit) { setError("유효하지 않은 리포트 링크입니다."); setLoading(false); return; }
 
@@ -692,11 +695,16 @@ export default function Report() {
       }
 
       // phone fallback (하위 호환)
-      const { data: customer } = await supabase
+      // 같은 번호로 고객이 2명 이상 등록되는 일이 실제로 있다(테스트 계정 중복 등).
+      // .single()을 쓰면 그 순간 조회가 실패(PGRST116)해 리포트가 아예 안 열린다.
+      // 테스트 계정을 빼고 가장 최근에 등록된 고객을 고른다.
+      const { data: matched } = await supabase
         .from("customers")
         .select("*")
         .eq("phone", phone)
-        .single();
+        .order("created_at", { ascending: false });
+
+      const customer = (matched ?? []).find(c => !c.is_test) ?? matched?.[0] ?? null;
 
       if (!customer) { setError("고객 정보를 찾을 수 없습니다."); setLoading(false); return; }
 
