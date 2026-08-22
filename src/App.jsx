@@ -11,11 +11,13 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: { storageKey: "sogam-stylist-auth" },
 });
 
+// ── 소감(SOGAM) 디자인 토큰 — Report.jsx와 동일하게 유지할 것 ────────────────
+// 색이 두 화면에서 어긋나면 같은 서비스로 안 보인다.
 const C = {
-  bg: "#f8f6f2", card: "#fff", border: "#ede8e0",
-  gold: "#b8965a", goldBg: "#fdf8f0", goldLight: "#d4b07a",
-  text: "#1a1a1a", sub: "#666", muted: "#999",
-  red: "#d94f4f", green: "#3a8c5c", blue: "#3a6fa8",
+  bg: "#faf9f7", card: "#fff", border: "#ece9e4", track: "#f1eeea",
+  brand: "#D9602B", brandSoft: "#fdf2ec", brandLine: "#f2cdb8",
+  text: "#17130f", sub: "#5f584f", muted: "#9c948a",
+  red: "#c4483c", green: "#2f7d5a", blue: "#3a6fa8",
   kakao: "#FEE500",
 };
 
@@ -55,7 +57,7 @@ async function callAI(prompt, imgBase64, imgType, onChunk, label, customerName, 
 
 function Btn({ children, onClick, variant = "primary", size = "md", disabled, full, style = {} }) {
   const sz = size === "sm" ? { fontSize: 12, padding: "7px 14px" } : size === "lg" ? { fontSize: 15, padding: "14px 28px" } : { fontSize: 13, padding: "10px 20px" };
-  const vr = variant === "gold" ? { background: C.gold, color: "#fff", boxShadow: "0 4px 16px rgba(184,150,90,0.3)" } : variant === "kakao" ? { background: C.kakao, color: "#3a1d00" } : variant === "ghost" ? { background: "transparent", color: C.sub, border: `1px solid ${C.border}` } : variant === "outline" ? { background: "#fff", color: C.gold, border: `1px solid ${C.gold}` } : { background: C.text, color: "#fff" };
+  const vr = variant === "brand" ? { background: C.brand, color: "#fff", boxShadow: "0 4px 16px rgba(217,96,43,0.26)" } : variant === "kakao" ? { background: C.kakao, color: "#3a1d00" } : variant === "ghost" ? { background: "transparent", color: C.sub, border: `1px solid ${C.border}` } : variant === "outline" ? { background: "#fff", color: C.brand, border: `1px solid ${C.brand}` } : { background: C.text, color: "#fff" };
   return <button onClick={onClick} disabled={disabled} style={{ ...sz, ...vr, border: vr.border || "none", borderRadius: 10, cursor: disabled ? "not-allowed" : "pointer", fontFamily: "inherit", fontWeight: 700, opacity: disabled ? 0.5 : 1, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6, width: full ? "100%" : "auto", transition: "all 0.18s", ...style }}>{children}</button>;
 }
 
@@ -68,7 +70,7 @@ function Field({ label, value, onChange, placeholder, type = "text", style = {} 
   return (
     <div style={style}>
       {label && <label style={{ fontSize: 12, color: C.sub, display: "block", marginBottom: 5, fontWeight: 600 }}>{label}</label>}
-      <input type={type} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} onFocus={() => setFocus(true)} onBlur={() => setFocus(false)} style={{ width: "100%", padding: "10px 14px", border: `1px solid ${focus ? C.gold : C.border}`, borderRadius: 9, fontSize: 13, color: C.text, fontFamily: "inherit", outline: "none", boxSizing: "border-box", transition: "border-color 0.2s" }} />
+      <input type={type} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} onFocus={() => setFocus(true)} onBlur={() => setFocus(false)} style={{ width: "100%", padding: "10px 14px", border: `1px solid ${focus ? C.brand : C.border}`, borderRadius: 9, fontSize: 13, color: C.text, fontFamily: "inherit", outline: "none", boxSizing: "border-box", transition: "border-color 0.2s" }} />
     </div>
   );
 }
@@ -84,7 +86,7 @@ function Chip({ score, label = "웰니스" }) {
 }
 
 function Bar({ value, color }) {
-  return <div style={{ height: 5, background: "#f0ece4", borderRadius: 99, overflow: "hidden" }}><div style={{ height: "100%", width: `${Math.min(value || 0, 100)}%`, background: color, borderRadius: 99 }} /></div>;
+  return <div style={{ height: 5, background: C.track, borderRadius: 99, overflow: "hidden" }}><div style={{ height: "100%", width: `${Math.min(value || 0, 100)}%`, background: color, borderRadius: 99 }} /></div>;
 }
 
 function Spark({ values, color }) {
@@ -119,8 +121,8 @@ function LoginPage() {
     }}>
       <div style={{ width: 380 }}>
         <div style={{ textAlign: "center", marginBottom: 40 }}>
-          <div style={{ width: 56, height: 56, borderRadius: 16, background: C.gold, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 26, margin: "0 auto 16px" }}>✦</div>
-          <p style={{ fontSize: 11, letterSpacing: "0.3em", color: C.gold, fontWeight: 700, marginBottom: 6 }}>{SHOP.en}</p>
+          <div style={{ width: 56, height: 56, borderRadius: 16, background: C.brand, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 26, margin: "0 auto 16px" }}>✦</div>
+          <p style={{ fontSize: 11, letterSpacing: "0.3em", color: C.brand, fontWeight: 700, marginBottom: 6 }}>{SHOP.en}</p>
           <h1 style={{ fontSize: 24, fontWeight: 900, color: C.text, marginBottom: 4 }}>{SHOP.name}</h1>
           <p style={{ fontSize: 12, color: C.muted }}>헤어케어 헬스 플랫폼</p>
         </div>
@@ -129,7 +131,7 @@ function LoginPage() {
           <Field label="이메일" value={email} onChange={setEmail} placeholder="이메일 입력" style={{ marginBottom: 12 }} />
           <Field label="비밀번호" value={pw} onChange={setPw} type="password" placeholder="비밀번호 입력" style={{ marginBottom: 8 }} />
           {err && <p style={{ fontSize: 12, color: C.red, marginBottom: 10 }}>⚠ {err}</p>}
-          <Btn variant="gold" size="lg" full onClick={login} disabled={loading}>
+          <Btn variant="brand" size="lg" full onClick={login} disabled={loading}>
             {loading ? "로그인 중..." : "로그인 →"}
           </Btn>
         </Card>
@@ -160,13 +162,13 @@ function CustomerList({ customers, onSelect, onAdd, loading }) {
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 }}>
         <div><h2 style={{ fontSize: 22, fontWeight: 900, marginBottom: 4 }}>고객 관리</h2><p style={{ fontSize: 13, color: C.muted }}>총 {list.length}명</p></div>
-        <Btn variant="gold" onClick={onAdd}>+ 신규 고객 등록</Btn>
+        <Btn variant="brand" onClick={onAdd}>+ 신규 고객 등록</Btn>
       </div>
       <div style={{ display: "flex", gap: 8, marginBottom: 16, alignItems: "center" }}>
         <Field value={search} onChange={setSearch} placeholder="🔍 이름 또는 전화번호 검색..." style={{ flex: 1 }} />
         <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
           {[{ key: "recent", label: "최근방문" }, { key: "name", label: "이름순" }, { key: "joined", label: "등록순" }].map(opt => (
-            <button key={opt.key} onClick={() => setSort(opt.key)} style={{ padding: "9px 10px", fontSize: 11, fontWeight: sort === opt.key ? 800 : 500, background: sort === opt.key ? C.gold : "#fff", color: sort === opt.key ? "#fff" : C.sub, border: `1px solid ${sort === opt.key ? C.gold : C.border}`, borderRadius: 8, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap", transition: "all 0.18s" }}>{opt.label}</button>
+            <button key={opt.key} onClick={() => setSort(opt.key)} style={{ padding: "9px 10px", fontSize: 11, fontWeight: sort === opt.key ? 800 : 500, background: sort === opt.key ? C.brand : "#fff", color: sort === opt.key ? "#fff" : C.sub, border: `1px solid ${sort === opt.key ? C.brand : C.border}`, borderRadius: 8, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap", transition: "all 0.18s" }}>{opt.label}</button>
           ))}
         </div>
       </div>
@@ -176,8 +178,8 @@ function CustomerList({ customers, onSelect, onAdd, loading }) {
             const visits = Array.isArray(c.visits) ? c.visits : [];
             const latest = visits[visits.length - 1];
             return (
-              <div key={c.id} onClick={() => onSelect(c)} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: "16px 20px", cursor: "pointer", display: "flex", alignItems: "center", gap: 16, transition: "all 0.18s" }} onMouseEnter={e => { e.currentTarget.style.borderColor = C.gold; e.currentTarget.style.boxShadow = "0 4px 20px rgba(184,150,90,0.12)"; }} onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.boxShadow = "none"; }}>
-                <div style={{ width: 46, height: 46, borderRadius: "50%", background: C.goldBg, border: `2px solid ${C.goldLight}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>👤</div>
+              <div key={c.id} onClick={() => onSelect(c)} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: "16px 20px", cursor: "pointer", display: "flex", alignItems: "center", gap: 16, transition: "all 0.18s" }} onMouseEnter={e => { e.currentTarget.style.borderColor = C.brand; e.currentTarget.style.boxShadow = "0 4px 20px rgba(184,150,90,0.12)"; }} onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.boxShadow = "none"; }}>
+                <div style={{ width: 46, height: 46, borderRadius: "50%", background: C.brandSoft, border: `2px solid ${C.brandLine}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>👤</div>
                 <div style={{ flex: 1 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
                     <span style={{ fontSize: 15, fontWeight: 800 }}>{c.name}</span>
@@ -186,7 +188,7 @@ function CustomerList({ customers, onSelect, onAdd, loading }) {
                   </div>
                   <p style={{ fontSize: 12, color: C.muted }}>{c.phone} · {c.stylist} · {visits.length}회 방문</p>
                 </div>
-                <Spark values={visits.map(v => v.score)} color={C.gold} />
+                <Spark values={visits.map(v => v.score)} color={C.brand} />
                 <div style={{ textAlign: "right", flexShrink: 0 }}><p style={{ fontSize: 11, color: C.muted }}>최근 방문</p><p style={{ fontSize: 12, fontWeight: 700 }}>{latest?.date ?? "-"}</p></div>
                 <span style={{ color: C.muted }}>›</span>
               </div>
@@ -228,7 +230,7 @@ function AddCustomer({ onSave, onCancel }) {
           <label style={{ fontSize: 12, color: C.sub, display: "block", marginBottom: 5, fontWeight: 600 }}>메모</label>
           <textarea value={form.memo} onChange={e => set("memo", e.target.value)} placeholder="알러지, 선호사항..." style={{ width: "100%", height: 70, padding: "10px 14px", border: `1px solid ${C.border}`, borderRadius: 9, fontSize: 13, fontFamily: "inherit", resize: "none", outline: "none", boxSizing: "border-box" }} />
         </div>
-        <div style={{ display: "flex", gap: 10 }}><Btn variant="ghost" onClick={onCancel} style={{ flex: 1 }}>취소</Btn><Btn variant="gold" onClick={save} disabled={saving} style={{ flex: 2 }}>{saving ? "저장 중..." : "✓ 등록 완료"}</Btn></div>
+        <div style={{ display: "flex", gap: 10 }}><Btn variant="ghost" onClick={onCancel} style={{ flex: 1 }}>취소</Btn><Btn variant="brand" onClick={save} disabled={saving} style={{ flex: 2 }}>{saving ? "저장 중..." : "✓ 등록 완료"}</Btn></div>
       </Card>
     </div>
   );
@@ -252,71 +254,78 @@ function renderMd(t) {
     if (/^분석\s*부위\s*:/.test(trimmed)) return null;
     const locMatch = trimmed.match(/^\[([^\]]+)\]$/);
     if (locMatch) {
-      return <p key={i} style={{ fontSize: 12, fontWeight: 800, color: C.gold, marginTop: 10, marginBottom: 4 }}>📍 {locMatch[1]}</p>;
+      return (
+        <p key={i} style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 12.5, fontWeight: 800, color: C.brand, marginTop: 14, marginBottom: 6 }}>
+          <span style={{ width: 5, height: 5, borderRadius: 99, background: C.brand, flexShrink: 0 }} />
+          {locMatch[1]}
+        </p>
+      );
     }
     const headerMatch = trimmed.match(/^#{1,3}\s+(.*)/);
     if (headerMatch) {
       const headerText = headerMatch[1].trim();
       if (!headerText) return null;
-      return <p key={i} style={{ fontSize: 13, fontWeight: 800, color: C.gold, marginTop: i > 0 ? 10 : 0, marginBottom: 4 }}>{headerText}</p>;
+      // 제목을 전부 브랜드색으로 칠하면 본문과 경쟁한다. 색 대신 크기·굵기로 위계를 준다.
+      return <p key={i} style={{ fontSize: 14.5, fontWeight: 800, color: C.text, letterSpacing: "-0.01em", marginTop: i > 0 ? 18 : 0, marginBottom: 7 }}>{headerText}</p>;
     }
-    const html = trimmed.replace(/\*\*(.*?)\*\*/g, `<strong style="color:${C.gold}">$1</strong>`);
-    return <p key={i} style={{ fontSize: 13, lineHeight: 1.8, color: C.sub, margin: "2px 0" }} dangerouslySetInnerHTML={{ __html: html }} />;
+    const html = trimmed.replace(/\*\*(.*?)\*\*/g, `<strong style="color:${C.brand}">$1</strong>`);
+    return <p key={i} style={{ fontSize: 13.5, lineHeight: 1.85, color: C.sub, margin: "3px 0" }} dangerouslySetInnerHTML={{ __html: html }} />;
   });
 }
 
+// 손님에게 태블릿을 돌려 직접 보여주는 화면.
+// 직원이 훑는 용도가 아니라 손님이 읽는 화면이므로, 다른 곳보다 글자를 키우고
+// 줄간격을 넓혔다. 스크롤 높이도 280 → 420으로 늘려 덜 답답하게 한다.
 function ScalpReportView({ report, analyzing }) {
   if (!report && !analyzing) {
     return (
-      <div style={{ textAlign: "center", padding: "60px 0", color: C.muted }}>
-        <div style={{ fontSize: 36, marginBottom: 8, opacity: 0.3 }}>🤖</div>
-        <p style={{ fontSize: 13 }}>분석 버튼을 눌러주세요</p>
+      <div style={{ textAlign: "center", padding: "56px 0", color: C.muted }}>
+        <p style={{ fontSize: 13.5 }}>분석 버튼을 눌러주세요</p>
       </div>
     );
   }
   const parsed = report ? parseScalpReport(report) : null;
   const isJson = parsed && (parsed.scalpType !== undefined || parsed.moisture !== undefined || parsed.aiAnalysis !== undefined);
+
+  const Label = ({ children }) => (
+    <p style={{ fontSize: 11, color: C.muted, marginBottom: 6, letterSpacing: "0.08em", fontWeight: 600 }}>{children}</p>
+  );
+
+  const Metric = ({ label, value, color }) => (
+    <div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6 }}>
+        <span style={{ fontSize: 13, color: C.sub }}>{label}</span>
+        <span style={{ fontSize: 16, fontWeight: 800, color, letterSpacing: "-0.02em" }}>{value}</span>
+      </div>
+      <Bar value={value} color={color} />
+    </div>
+  );
+
   return (
-    <div style={{ maxHeight: 280, overflowY: "auto" }}>
+    <div style={{ maxHeight: 420, overflowY: "auto" }}>
       {isJson ? (
-        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
           {parsed.scalpType && (
-            <div>
-              <p style={{ fontSize: 11, color: C.muted, marginBottom: 2 }}>두피 타입</p>
-              <p style={{ fontSize: 14, fontWeight: 800, color: C.gold }}>{parsed.scalpType}</p>
+            <div style={{ background: C.brandSoft, borderRadius: 12, padding: "12px 14px" }}>
+              <Label>두피 타입</Label>
+              <p style={{ fontSize: 16, fontWeight: 800, color: C.brand, letterSpacing: "-0.01em" }}>{parsed.scalpType}</p>
             </div>
           )}
-          {parsed.moisture !== undefined && (
-            <div>
-              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                <span style={{ fontSize: 12, color: C.sub }}>수분도</span>
-                <span style={{ fontSize: 12, fontWeight: 800, color: C.blue }}>{parsed.moisture}</span>
-              </div>
-              <Bar value={parsed.moisture} color={C.blue} />
-            </div>
-          )}
-          {parsed.elasticity !== undefined && (
-            <div>
-              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                <span style={{ fontSize: 12, color: C.sub }}>탄력도</span>
-                <span style={{ fontSize: 12, fontWeight: 800, color: C.green }}>{parsed.elasticity}</span>
-              </div>
-              <Bar value={parsed.elasticity} color={C.green} />
-            </div>
-          )}
+          {parsed.moisture !== undefined && <Metric label="수분도" value={parsed.moisture} color={C.blue} />}
+          {parsed.elasticity !== undefined && <Metric label="탄력도" value={parsed.elasticity} color={C.green} />}
           {parsed.concerns?.length > 0 && (
             <div>
-              <p style={{ fontSize: 11, color: C.muted, marginBottom: 4 }}>주의 소견</p>
-              <ul style={{ paddingLeft: 16, margin: 0 }}>
+              <Label>주의 소견</Label>
+              <ul style={{ paddingLeft: 18, margin: 0 }}>
                 {parsed.concerns.map((c, i) => (
-                  <li key={i} style={{ fontSize: 12, color: C.sub, lineHeight: 1.8 }}>{c}</li>
+                  <li key={i} style={{ fontSize: 13.5, color: C.sub, lineHeight: 1.85, marginBottom: 2 }}>{c}</li>
                 ))}
               </ul>
             </div>
           )}
           {parsed.aiAnalysis && (
-            <div>
-              <p style={{ fontSize: 11, color: C.muted, marginBottom: 4 }}>상세 분석</p>
+            <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 16 }}>
+              <Label>상세 분석</Label>
               {renderMd(parsed.aiAnalysis)}
             </div>
           )}
@@ -324,7 +333,7 @@ function ScalpReportView({ report, analyzing }) {
       ) : (
         renderMd(report || "")
       )}
-      {analyzing && <span style={{ color: C.gold }}>▋</span>}
+      {analyzing && <span style={{ color: C.brand }}>▋</span>}
     </div>
   );
 }
@@ -684,7 +693,7 @@ function ScalpTab({ customer, onUpdate }) {
           <div style={{ display: "flex", gap: 8 }}>
             {images.length < 5 && <Btn variant="outline" size="sm" onClick={() => fileRef.current.click()}>+ 사진 추가</Btn>}
             {images.length > 0 && (
-              <Btn variant="gold" size="sm" onClick={() => images.forEach((_, i) => { if (!images[i].done && !images[i].analyzing) analyze(i); })}>
+              <Btn variant="brand" size="sm" onClick={() => images.forEach((_, i) => { if (!images[i].done && !images[i].analyzing) analyze(i); })}>
                 🔬 전체 분석
               </Btn>
             )}
@@ -694,7 +703,7 @@ function ScalpTab({ customer, onUpdate }) {
         {images.length > 0 ? (
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
             {images.map((img, i) => (
-              <div key={i} onClick={() => setActiveIdx(i)} style={{ position: "relative", width: 82, height: 82, borderRadius: 10, overflow: "hidden", border: `2px solid ${activeIdx === i ? C.gold : C.border}`, cursor: "pointer" }}>
+              <div key={i} onClick={() => setActiveIdx(i)} style={{ position: "relative", width: 82, height: 82, borderRadius: 10, overflow: "hidden", border: `2px solid ${activeIdx === i ? C.brand : C.border}`, cursor: "pointer" }}>
                 <img src={img.src} alt={img.label} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                 <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, background: "rgba(0,0,0,0.55)", padding: "2px 4px", textAlign: "center" }}>
                   <span style={{ fontSize: 9, color: "#fff", fontWeight: 700 }}>{img.label}</span>
@@ -716,7 +725,7 @@ function ScalpTab({ customer, onUpdate }) {
             )}
           </div>
         ) : (
-          <div onClick={() => fileRef.current.click()} style={{ border: `2px dashed ${C.border}`, borderRadius: 12, padding: "48px 20px", textAlign: "center", cursor: "pointer" }} onMouseEnter={e => e.currentTarget.style.borderColor = C.gold} onMouseLeave={e => e.currentTarget.style.borderColor = C.border}>
+          <div onClick={() => fileRef.current.click()} style={{ border: `2px dashed ${C.border}`, borderRadius: 12, padding: "48px 20px", textAlign: "center", cursor: "pointer" }} onMouseEnter={e => e.currentTarget.style.borderColor = C.brand} onMouseLeave={e => e.currentTarget.style.borderColor = C.border}>
             <div style={{ fontSize: 44, marginBottom: 12 }}>🔬</div>
             <p style={{ fontSize: 14, fontWeight: 700, marginBottom: 6 }}>두피 사진 업로드 (최대 5장)</p>
             <p style={{ fontSize: 12, color: C.muted }}>Ctrl 누르고 클릭하면 여러 장 선택 가능</p>
@@ -731,7 +740,7 @@ function ScalpTab({ customer, onUpdate }) {
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
               <h3 style={{ fontSize: 14, fontWeight: 800 }}>{images[activeIdx]?.label}</h3>
               {!images[activeIdx]?.done && !images[activeIdx]?.analyzing && (
-                <Btn variant="gold" size="sm" onClick={() => analyze(activeIdx)}>🔬 분석</Btn>
+                <Btn variant="brand" size="sm" onClick={() => analyze(activeIdx)}>🔬 분석</Btn>
               )}
             </div>
             <div style={{ position: "relative", borderRadius: 12, overflow: "hidden" }}>
@@ -740,7 +749,7 @@ function ScalpTab({ customer, onUpdate }) {
                 <div style={{ position: "absolute", inset: 0, background: "rgba(255,255,255,0.85)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 10 }}>
                   <p style={{ fontSize: 14, fontWeight: 700 }}>AI 분석 중...</p>
                   <div style={{ width: "60%", height: 4, background: C.border, borderRadius: 99 }}>
-                    <div style={{ height: "100%", width: "70%", background: C.gold, borderRadius: 99 }} />
+                    <div style={{ height: "100%", width: "70%", background: C.brand, borderRadius: 99 }} />
                   </div>
                 </div>
               )}
@@ -780,7 +789,7 @@ function CompareSection({ current, prev, compact = false }) {
   if (!prev) {
     return (
       <div style={{ background: C.bg, borderRadius: 10, padding: "10px 14px", marginTop: 12 }}>
-        <p style={{ fontSize: 11, color: C.gold, fontWeight: 800, marginBottom: 3 }}>📈 방문 추이</p>
+        <p style={{ fontSize: 11, color: C.brand, fontWeight: 800, marginBottom: 3 }}>📈 방문 추이</p>
         <p style={{ fontSize: 12, color: C.muted }}>첫 방문 기록입니다. 다음 방문부터 변화를 확인할 수 있어요</p>
       </div>
     );
@@ -792,7 +801,7 @@ function CompareSection({ current, prev, compact = false }) {
   return (
     <div style={{ background: C.bg, borderRadius: 10, padding: "12px 14px", marginTop: 12 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-        <p style={{ fontSize: 11, fontWeight: 800, color: C.gold }}>📈 지난 방문 대비 변화</p>
+        <p style={{ fontSize: 11, fontWeight: 800, color: C.brand }}>📈 지난 방문 대비 변화</p>
         <p style={{ fontSize: 10, color: C.muted }}>기준: {prev.date}</p>
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 5 }}>
@@ -874,7 +883,7 @@ function HistoryTab({ customer, onAddVisit, onUpdate }) {
   const meta = {
     sleep: { label: "수면 품질", color: C.blue },
     stress: { label: "스트레스", color: C.red },
-    moisture: { label: "두피 수분", color: C.gold },
+    moisture: { label: "두피 수분", color: C.brand },
     elasticity: { label: "모발 탄력", color: C.green },
     score: { label: "종합 점수", color: C.text }
   };
@@ -946,13 +955,13 @@ function HistoryTab({ customer, onAddVisit, onUpdate }) {
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
         <h3 style={{ fontSize: 15, fontWeight: 800 }}>📅 방문 기록 ({visits.length}회)</h3>
-        <Btn variant="gold" size="sm" onClick={() => setShowForm(!showForm)}>
+        <Btn variant="brand" size="sm" onClick={() => setShowForm(!showForm)}>
           {showForm ? "✕ 닫기" : "+ 방문 추가"}
         </Btn>
       </div>
 
       {showForm && (
-        <Card style={{ marginBottom: 16, background: C.goldBg, border: `1px solid ${C.goldLight}` }}>
+        <Card style={{ marginBottom: 16, background: C.brandSoft, border: `1px solid ${C.brandLine}` }}>
           <h4 style={{ fontSize: 13, fontWeight: 800, marginBottom: 14 }}>새 방문 기록</h4>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>
             <Field label="방문일" value={form.date} onChange={v => set("date", v)} type="date" />
@@ -975,8 +984,8 @@ function HistoryTab({ customer, onAddVisit, onUpdate }) {
             placeholder="스타일리스트 메모..."
             style={{ width: "100%", height: 60, padding: "8px 12px", border: `1px solid ${C.border}`, borderRadius: 9, fontSize: 13, fontFamily: "inherit", resize: "none", outline: "none", boxSizing: "border-box", marginBottom: 12 }} />
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <p style={{ fontSize: 13, color: C.sub }}>예상 점수: <strong style={{ color: C.gold, fontSize: 18 }}>{score(form)}점</strong></p>
-            <Btn variant="gold" size="sm" onClick={save} disabled={saving}>{saving ? "저장 중..." : "저장"}</Btn>
+            <p style={{ fontSize: 13, color: C.sub }}>예상 점수: <strong style={{ color: C.brand, fontSize: 18 }}>{score(form)}점</strong></p>
+            <Btn variant="brand" size="sm" onClick={save} disabled={saving}>{saving ? "저장 중..." : "저장"}</Btn>
           </div>
         </Card>
       )}
@@ -1013,15 +1022,15 @@ function HistoryTab({ customer, onAddVisit, onUpdate }) {
                 style={{
                   display: "flex", justifyContent: "space-between", alignItems: "center",
                   padding: "14px 20px", cursor: "pointer",
-                  background: isExpanded ? C.goldBg : "#fff",
-                  borderBottom: isExpanded ? `1px solid ${C.goldLight}` : "none",
+                  background: isExpanded ? C.brandSoft : "#fff",
+                  borderBottom: isExpanded ? `1px solid ${C.brandLine}` : "none",
                   transition: "background 0.2s",
                 }}
               >
                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                   <span style={{ fontSize: 14, fontWeight: 800 }}>{v.date}</span>
                   {isLatest && (
-                    <span style={{ fontSize: 10, background: C.goldBg, color: C.gold, border: `1px solid ${C.goldLight}`, padding: "2px 8px", borderRadius: 99, fontWeight: 700 }}>최근</span>
+                    <span style={{ fontSize: 10, background: C.brandSoft, color: C.brand, border: `1px solid ${C.brandLine}`, padding: "2px 8px", borderRadius: 99, fontWeight: 700 }}>최근</span>
                   )}
                   {v.service && <span style={{ fontSize: 12, color: C.muted }}>{v.service}</span>}
                 </div>
@@ -1059,7 +1068,7 @@ function HistoryTab({ customer, onAddVisit, onUpdate }) {
                         style={{ width: "100%", height: 60, padding: "8px 12px", border: `1px solid ${C.border}`, borderRadius: 9, fontSize: 13, fontFamily: "inherit", resize: "none", outline: "none", boxSizing: "border-box", marginBottom: 12 }} />
                       <div style={{ display: "flex", gap: 8 }}>
                         <Btn variant="ghost" size="sm" onClick={cancelEdit} style={{ flex: 1 }}>취소</Btn>
-                        <Btn variant="gold" size="sm" onClick={saveEdit} disabled={updating} style={{ flex: 2 }}>{updating ? "저장 중..." : "✓ 수정 완료"}</Btn>
+                        <Btn variant="brand" size="sm" onClick={saveEdit} disabled={updating} style={{ flex: 2 }}>{updating ? "저장 중..." : "✓ 수정 완료"}</Btn>
                       </div>
                     </div>
                   ) : (
@@ -1082,7 +1091,7 @@ function HistoryTab({ customer, onAddVisit, onUpdate }) {
                     const r = parseScalpReport(v.scalp_report);
                     return (
                       <div style={{ background: C.bg, borderRadius: 8, padding: "10px 14px", marginBottom: 12 }}>
-                        <p style={{ fontSize: 11, fontWeight: 800, color: C.gold, marginBottom: 8 }}>🔬 두피 분석 결과</p>
+                        <p style={{ fontSize: 11, fontWeight: 800, color: C.brand, marginBottom: 8 }}>🔬 두피 분석 결과</p>
                         {r?.scalpType && r.scalpType !== "분석 참조" && (
                           <p style={{ fontSize: 12, color: C.sub, marginBottom: 8 }}>두피 타입: <strong>{r.scalpType}</strong></p>
                         )}
@@ -1127,15 +1136,15 @@ function HistoryTab({ customer, onAddVisit, onUpdate }) {
                     disabled={!v.report_token}
                     style={{
                       width: "100%", padding: "11px", borderRadius: 10,
-                      border: `1.5px solid ${v.report_token ? C.gold : C.muted}`,
-                      background: "#fff", color: v.report_token ? C.gold : C.muted,
+                      border: `1.5px solid ${v.report_token ? C.brand : C.muted}`,
+                      background: "#fff", color: v.report_token ? C.brand : C.muted,
                       fontSize: 13, fontWeight: 800, fontFamily: "inherit",
                       cursor: v.report_token ? "pointer" : "default",
                       display: "flex", alignItems: "center",
                       justifyContent: "center", gap: 6, transition: "all 0.18s",
                       marginTop: 12,
                     }}
-                    onMouseEnter={e => { if (v.report_token) e.currentTarget.style.background = C.goldBg; }}
+                    onMouseEnter={e => { if (v.report_token) e.currentTarget.style.background = C.brandSoft; }}
                     onMouseLeave={e => { e.currentTarget.style.background = "#fff"; }}
                   >
                     {v.report_token ? "📋 리포트 확인" : "📋 리포트 분석 후 링크 생성됩니다"}
@@ -1208,7 +1217,7 @@ function KakaoTab({ customer }) {
   const meta = {
     sleep: { label: "수면 품질", color: C.blue },
     stress: { label: "스트레스", color: C.red },
-    moisture: { label: "두피 수분", color: C.gold },
+    moisture: { label: "두피 수분", color: C.brand },
     elasticity: { label: "모발 탄력", color: C.green },
   };
 
@@ -1231,7 +1240,7 @@ function KakaoTab({ customer }) {
           <select
             value={selectedVisitId ?? ""}
             onChange={e => { setSelectedVisitId(Number(e.target.value)); setSent(false); setSendError(""); }}
-            style={{ width: "100%", padding: "11px 14px", border: `1.5px solid ${C.gold}`, borderRadius: 10, fontSize: 14, fontFamily: "inherit", fontWeight: 700, color: C.text, background: C.goldBg, outline: "none", cursor: "pointer" }}
+            style={{ width: "100%", padding: "11px 14px", border: `1.5px solid ${C.brand}`, borderRadius: 10, fontSize: 14, fontFamily: "inherit", fontWeight: 700, color: C.text, background: C.brandSoft, outline: "none", cursor: "pointer" }}
           >
             {reversedVisits.map((v, i) => (
               <option key={v.id} value={v.id}>{v.date} · {v.score}점 {i === 0 ? "(최근)" : ""}</option>
@@ -1262,7 +1271,7 @@ function KakaoTab({ customer }) {
 
         <Card>
           <h3 style={{ fontSize: 14, fontWeight: 800, marginBottom: 12 }}>📨 발송</h3>
-          <div style={{ background: C.goldBg, border: `1px solid ${C.goldLight}`, borderRadius: 10, padding: "12px 16px", marginBottom: 14 }}>
+          <div style={{ background: C.brandSoft, border: `1px solid ${C.brandLine}`, borderRadius: 10, padding: "12px 16px", marginBottom: 14 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <div>
                 <p style={{ fontSize: 13, fontWeight: 800 }}>{customer.name}</p>
@@ -1271,7 +1280,7 @@ function KakaoTab({ customer }) {
               {selectedVisit && <Chip score={selectedVisit.score} />}
             </div>
           </div>
-          <button onClick={openReport} style={{ width: "100%", padding: "12px", borderRadius: 10, marginBottom: 10, border: `1.5px solid ${C.gold}`, background: "#fff", color: C.gold, fontSize: 13, fontWeight: 800, fontFamily: "inherit", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }} onMouseEnter={e => e.currentTarget.style.background = C.goldBg} onMouseLeave={e => e.currentTarget.style.background = "#fff"}>
+          <button onClick={openReport} style={{ width: "100%", padding: "12px", borderRadius: 10, marginBottom: 10, border: `1.5px solid ${C.brand}`, background: "#fff", color: C.brand, fontSize: 13, fontWeight: 800, fontFamily: "inherit", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }} onMouseEnter={e => e.currentTarget.style.background = C.brandSoft} onMouseLeave={e => e.currentTarget.style.background = "#fff"}>
             📋 리포트 확인 (새탭)
           </button>
           <button onClick={sendAlimtalk} disabled={sending || !selectedVisit} style={{ width: "100%", padding: "12px", borderRadius: 10, border: "none", background: sending ? C.border : C.kakao, color: "#3a1d00", fontSize: 13, fontWeight: 800, fontFamily: "inherit", cursor: sending ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, opacity: sending ? 0.7 : 1 }}>
@@ -1296,7 +1305,7 @@ function KakaoTab({ customer }) {
         <h3 style={{ fontSize: 14, fontWeight: 800, marginBottom: 16 }}>📱 리포트 미리보기</h3>
         {selectedVisit ? (
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            <div style={{ background: C.goldBg, border: `1px solid ${C.goldLight}`, borderRadius: 12, padding: "16px", textAlign: "center" }}>
+            <div style={{ background: C.brandSoft, border: `1px solid ${C.brandLine}`, borderRadius: 12, padding: "16px", textAlign: "center" }}>
               <p style={{ fontSize: 18, fontWeight: 900 }}>{customer.name}님</p>
               <p style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>{selectedVisit.date} · {customer.stylist} 스타일리스트</p>
               <p style={{ fontSize: 32, fontWeight: 900, marginTop: 10, color: selectedVisit.score >= 70 ? C.green : selectedVisit.score >= 50 ? "#b07800" : C.red }}>{selectedVisit.score}점</p>
@@ -1322,9 +1331,9 @@ function KakaoTab({ customer }) {
               const preview = displayText.slice(0, 200);
               return (
                 <div style={{ background: C.bg, borderRadius: 12, padding: 16 }}>
-                  <p style={{ fontSize: 12, fontWeight: 800, marginBottom: 8, color: C.gold }}>🔬 AI 두피 분석</p>
+                  <p style={{ fontSize: 12, fontWeight: 800, marginBottom: 8, color: C.brand }}>🔬 AI 두피 분석</p>
                   {r?.scalpType && r.scalpType !== "분석 참조" && (
-                    <p style={{ fontSize: 11, color: C.gold, fontWeight: 700, marginBottom: 4 }}>두피 타입: {r.scalpType}</p>
+                    <p style={{ fontSize: 11, color: C.brand, fontWeight: 700, marginBottom: 4 }}>두피 타입: {r.scalpType}</p>
                   )}
                   <div style={{ fontSize: 11 }}>{renderMd(preview + (displayText.length > 200 ? "..." : ""))}</div>
                 </div>
@@ -1398,8 +1407,8 @@ function ReportOfferModal({ customer, onClose }) {
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div style={{ background: "#fff", borderRadius: "20px 20px 0 0", padding: "28px 24px 40px", maxWidth: 480, width: "100%", maxHeight: "90vh", overflowY: "auto" }}>
-        <div style={{ background: C.goldBg, border: `1px solid ${C.goldLight}`, borderRadius: 12, padding: "12px 16px", marginBottom: 20 }}>
-          <p style={{ fontSize: 11, color: C.gold, fontWeight: 800, marginBottom: 4 }}>📋 제안 멘트(통일)</p>
+        <div style={{ background: C.brandSoft, border: `1px solid ${C.brandLine}`, borderRadius: 12, padding: "12px 16px", marginBottom: 20 }}>
+          <p style={{ fontSize: 11, color: C.brand, fontWeight: 800, marginBottom: 4 }}>📋 제안 멘트(통일)</p>
           <p style={{ fontSize: 13, color: C.text, lineHeight: 1.7 }}>
             "두피 상태를 AI로 분석한 정밀 리포트를 카카오톡으로 보내드려요. 1만원인데, 받아보시겠어요?"
           </p>
@@ -1411,11 +1420,11 @@ function ReportOfferModal({ customer, onClose }) {
           <button onClick={() => setAccepted(true)} style={{ padding: "22px 12px", borderRadius: 14, fontSize: 17, fontWeight: 900, border: `2.5px solid ${accepted === true ? C.green : C.border}`, background: accepted === true ? "#edf7f1" : "#fff", color: accepted === true ? C.green : C.muted, cursor: "pointer", fontFamily: "inherit", transition: "all 0.18s" }}>✅ 수락</button>
           <button onClick={() => setAccepted(false)} style={{ padding: "22px 12px", borderRadius: 14, fontSize: 17, fontWeight: 900, border: `2.5px solid ${accepted === false ? C.red : C.border}`, background: accepted === false ? "#fff0f0" : "#fff", color: accepted === false ? C.red : C.muted, cursor: "pointer", fontFamily: "inherit", transition: "all 0.18s" }}>❌ 거절</button>
         </div>
-        <div onClick={() => setHairLoss(p => !p)} style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 16px", border: `1.5px solid ${hairLoss ? C.gold : C.border}`, borderRadius: 12, background: hairLoss ? C.goldBg : "#fff", cursor: "pointer", marginBottom: 16, transition: "all 0.18s" }}>
-          <div style={{ width: 22, height: 22, borderRadius: 6, border: `2px solid ${hairLoss ? C.gold : C.border}`, background: hairLoss ? C.gold : "#fff", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, transition: "all 0.18s" }}>
+        <div onClick={() => setHairLoss(p => !p)} style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 16px", border: `1.5px solid ${hairLoss ? C.brand : C.border}`, borderRadius: 12, background: hairLoss ? C.brandSoft : "#fff", cursor: "pointer", marginBottom: 16, transition: "all 0.18s" }}>
+          <div style={{ width: 22, height: 22, borderRadius: 6, border: `2px solid ${hairLoss ? C.brand : C.border}`, background: hairLoss ? C.brand : "#fff", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, transition: "all 0.18s" }}>
             {hairLoss && <span style={{ color: "#fff", fontSize: 13, fontWeight: 900 }}>✓</span>}
           </div>
-          <span style={{ fontSize: 14, fontWeight: 700, color: hairLoss ? C.gold : C.text }}>탈모 걱정 / 탈모 진행 중</span>
+          <span style={{ fontSize: 14, fontWeight: 700, color: hairLoss ? C.brand : C.text }}>탈모 걱정 / 탈모 진행 중</span>
         </div>
         <div style={{ marginBottom: 16 }}>
           <label style={{ fontSize: 12, color: C.sub, display: "block", marginBottom: 5, fontWeight: 600 }}>연령대</label>
@@ -1437,7 +1446,7 @@ function ReportOfferModal({ customer, onClose }) {
         </div>
         <div style={{ display: "flex", gap: 10 }}>
           <Btn variant="ghost" onClick={onClose} style={{ flex: 1 }}>취소</Btn>
-          <Btn variant="gold" onClick={save} disabled={saving || accepted === null} style={{ flex: 2 }}>{saving ? "저장 중..." : "✓ 기록 저장"}</Btn>
+          <Btn variant="brand" onClick={save} disabled={saving || accepted === null} style={{ flex: 2 }}>{saving ? "저장 중..." : "✓ 기록 저장"}</Btn>
         </div>
       </div>
     </div>
@@ -1513,7 +1522,7 @@ function CustomerDetail({ customer, onBack, onUpdate, onDeleteCustomer }) {
       </div>
 
       {editingProfile && (
-        <Card style={{ marginBottom: 20, background: C.goldBg, border: `1px solid ${C.goldLight}` }}>
+        <Card style={{ marginBottom: 20, background: C.brandSoft, border: `1px solid ${C.brandLine}` }}>
           <h4 style={{ fontSize: 13, fontWeight: 800, marginBottom: 14 }}>✏️ 고객 정보 수정</h4>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
             <Field label="이름" value={profileForm.name} onChange={v => setProfileForm(p => ({ ...p, name: v }))} placeholder="홍길동" />
@@ -1523,7 +1532,7 @@ function CustomerDetail({ customer, onBack, onUpdate, onDeleteCustomer }) {
               <label style={{ fontSize: 12, color: C.sub, display: "block", marginBottom: 5, fontWeight: 600 }}>성별</label>
               <div style={{ display: "flex", gap: 8 }}>
                 {["여", "남"].map(g => (
-                  <button key={g} onClick={() => setProfileForm(p => ({ ...p, gender: g }))} style={{ flex: 1, padding: "9px", border: `1px solid ${profileForm.gender === g ? C.gold : C.border}`, borderRadius: 9, background: profileForm.gender === g ? C.goldBg : "#fff", color: profileForm.gender === g ? C.gold : C.sub, fontWeight: profileForm.gender === g ? 800 : 400, cursor: "pointer", fontFamily: "inherit", fontSize: 13 }}>{g}</button>
+                  <button key={g} onClick={() => setProfileForm(p => ({ ...p, gender: g }))} style={{ flex: 1, padding: "9px", border: `1px solid ${profileForm.gender === g ? C.brand : C.border}`, borderRadius: 9, background: profileForm.gender === g ? C.brandSoft : "#fff", color: profileForm.gender === g ? C.brand : C.sub, fontWeight: profileForm.gender === g ? 800 : 400, cursor: "pointer", fontFamily: "inherit", fontSize: 13 }}>{g}</button>
                 ))}
               </div>
             </div>
@@ -1540,7 +1549,7 @@ function CustomerDetail({ customer, onBack, onUpdate, onDeleteCustomer }) {
           </div>
           <div style={{ display: "flex", gap: 10 }}>
             <Btn variant="ghost" onClick={cancelEditProfile} style={{ flex: 1 }}>취소</Btn>
-            <Btn variant="gold" onClick={saveProfile} disabled={savingProfile} style={{ flex: 2 }}>{savingProfile ? "저장 중..." : "✓ 저장"}</Btn>
+            <Btn variant="brand" onClick={saveProfile} disabled={savingProfile} style={{ flex: 2 }}>{savingProfile ? "저장 중..." : "✓ 저장"}</Btn>
           </div>
         </Card>
       )}
@@ -1608,8 +1617,8 @@ export default function App() {
       <div style={{ textAlign: "center", maxWidth: 360 }}>
         <div style={{ fontSize: 32, marginBottom: 16 }}>🚫</div>
         <p style={{ fontSize: 15, fontWeight: 800, color: C.text, marginBottom: 8 }}>원장님 계정으로 로그인되어 있습니다</p>
-        <p style={{ fontSize: 13, color: C.sub, marginBottom: 24, lineHeight: 1.7 }}>원장님은 <strong style={{ color: C.gold }}>/owner</strong> 페이지에서 로그인해주세요.</p>
-        <Btn variant="gold" onClick={() => supabase.auth.signOut()}>확인 (로그아웃)</Btn>
+        <p style={{ fontSize: 13, color: C.sub, marginBottom: 24, lineHeight: 1.7 }}>원장님은 <strong style={{ color: C.brand }}>/owner</strong> 페이지에서 로그인해주세요.</p>
+        <Btn variant="brand" onClick={() => supabase.auth.signOut()}>확인 (로그아웃)</Btn>
       </div>
     </div>
   );
@@ -1619,7 +1628,7 @@ export default function App() {
         <div style={{ fontSize: 32, marginBottom: 16 }}>⛔</div>
         <p style={{ fontSize: 15, fontWeight: 800, color: C.text, marginBottom: 8 }}>접근 권한이 없습니다</p>
         <p style={{ fontSize: 13, color: C.sub, marginBottom: 24 }}>이 계정은 스타일리스트 화면에 접근할 수 없습니다.</p>
-        <Btn variant="gold" onClick={() => supabase.auth.signOut()}>로그아웃</Btn>
+        <Btn variant="brand" onClick={() => supabase.auth.signOut()}>로그아웃</Btn>
       </div>
     </div>
   );
@@ -1630,7 +1639,7 @@ export default function App() {
       <div style={{ background: "#fff", borderBottom: `1px solid ${C.border}`, position: "sticky", top: 0, zIndex: 100, boxShadow: "0 1px 12px rgba(0,0,0,0.05)" }}>
         <div style={{ maxWidth: 980, margin: "0 auto", padding: "0 24px", height: 58, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <div style={{ width: 32, height: 32, borderRadius: 9, background: C.gold, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15 }}>✦</div>
+            <div style={{ width: 32, height: 32, borderRadius: 9, background: C.brand, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15 }}>✦</div>
             <div><p style={{ fontSize: 13, fontWeight: 900 }}>{SHOP.name}</p><p style={{ fontSize: 9, color: C.muted, letterSpacing: "0.08em" }}>HAIRCARE HEALTH PLATFORM</p></div>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>

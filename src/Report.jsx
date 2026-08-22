@@ -534,13 +534,18 @@ function renderMarkdown(text) {
     if (/^분석\s*부위\s*:/.test(trimmed)) return null;
     const locMatch = trimmed.match(/^\[([^\]]+)\]$/);
     if (locMatch) {
-      return <p key={i} style={{ fontSize: 12, fontWeight: 800, color: C.brand, marginTop: 10, marginBottom: 4 }}>📍 {locMatch[1]}</p>;
+      return (
+        <p key={i} style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 12.5, fontWeight: 800, color: C.brand, marginTop: 14, marginBottom: 6 }}>
+          <span style={{ width: 5, height: 5, borderRadius: 99, background: C.brand, flexShrink: 0 }} />
+          {locMatch[1]}
+        </p>
+      );
     }
     const locInlineMatch = trimmed.match(/^\[([^\]]+)\]\s+(.+)/);
     if (locInlineMatch) {
       return (
-        <p key={i} style={{ fontSize: 13, color: C.sub, lineHeight: 1.8, marginBottom: 4 }}>
-          <span style={{ fontWeight: 800, color: C.brand }}>📍 {locInlineMatch[1]}</span>
+        <p key={i} style={{ fontSize: 13.5, color: C.sub, lineHeight: 1.85, marginBottom: 5 }}>
+          <span style={{ fontWeight: 800, color: C.brand }}>{locInlineMatch[1]}</span>
           {' '}{locInlineMatch[2]}
         </p>
       );
@@ -549,11 +554,12 @@ function renderMarkdown(text) {
     if (headerMatch) {
       const hText = headerMatch[1].trim();
       if (!hText) return null;
-      return <p key={i} style={{ fontSize: 13, fontWeight: 800, color: C.brand, marginTop: i > 0 ? 12 : 0, marginBottom: 4 }}>{hText}</p>;
+      // 제목을 전부 브랜드색으로 칠하면 본문과 경쟁한다. 색 대신 크기·굵기로 위계를 준다.
+      return <p key={i} style={{ fontSize: 14.5, fontWeight: 800, color: C.text, letterSpacing: "-0.01em", marginTop: i > 0 ? 18 : 0, marginBottom: 7 }}>{hText}</p>;
     }
     const parts = trimmed.split('**');
     return (
-      <p key={i} style={{ fontSize: 13, color: C.sub, lineHeight: 1.8, marginBottom: 2 }}>
+      <p key={i} style={{ fontSize: 13.5, color: C.sub, lineHeight: 1.85, marginBottom: 3 }}>
         {parts.map((part, pi) =>
           pi % 2 === 1
             ? <strong key={pi} style={{ fontWeight: 700, color: C.brand }}>{part}</strong>
@@ -820,15 +826,20 @@ export default function Report() {
   };
 
   return (
-    <div style={{ minHeight: "100vh", background: C.bg, fontFamily: "'Noto Sans KR', sans-serif", color: C.text }}>
-      <style>{`@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700;900&display=swap');* { box-sizing: border-box; margin: 0; padding: 0; }`}</style>
+    <div style={{ minHeight: "100vh", background: C.bg, fontFamily: "var(--sogam-font)", color: C.text }}>
+      <style>{`* { box-sizing: border-box; margin: 0; padding: 0; }`}</style>
 
-      {/* 헤더 — 색 면을 깔지 않고 여백과 헤어라인으로 구분한다 */}
-      <div style={{ background: C.card, borderBottom: `1px solid ${C.border}`, padding: "30px 20px 24px" }}>
+      {/* 헤더 — 브랜드 워드마크를 주인공으로. 색 면 대신 여백과 헤어라인으로 구분한다 */}
+      <div style={{ background: C.card, borderBottom: `1px solid ${C.border}`, padding: "34px 20px 26px" }}>
         <div style={{ maxWidth: 480, margin: "0 auto" }}>
-          <p style={{ fontSize: 11, letterSpacing: "0.34em", fontWeight: 800, color: C.brand, marginBottom: 12 }}>SOGAM</p>
-          <h1 style={{ fontSize: 23, fontWeight: 800, color: C.text, letterSpacing: "-0.02em" }}>두피 웰니스 리포트</h1>
-          <p style={{ fontSize: 12.5, color: C.muted, marginTop: 7 }}>{visit.date} · {customer.stylist} 스타일리스트</p>
+          <p style={{
+            fontSize: 28, fontWeight: 800, color: C.brand, lineHeight: 1,
+            letterSpacing: "0.26em", marginBottom: 14,
+            // 자간이 마지막 글자 뒤에도 붙어 오른쪽이 떠 보이는 걸 상쇄
+            marginRight: "-0.26em",
+          }}>SOGAM</p>
+          <h1 style={{ fontSize: 17, fontWeight: 700, color: C.text, letterSpacing: "-0.01em" }}>두피 웰니스 리포트</h1>
+          <p style={{ fontSize: 12.5, color: C.muted, marginTop: 6 }}>{visit.date} · {customer.stylist} 스타일리스트</p>
         </div>
       </div>
 
@@ -977,9 +988,9 @@ export default function Report() {
         {shareUrl && <ShareButton url={shareUrl} />}
 
         {/* 하단 */}
-        <div style={{ textAlign: "center", padding: "28px 0 8px", borderTop: `1px solid ${C.border}`, marginTop: 8 }}>
-          <p style={{ fontSize: 11, letterSpacing: "0.34em", fontWeight: 800, color: C.brand, marginBottom: 8 }}>SOGAM</p>
-          <p style={{ fontSize: 11.5, color: C.muted }}>다음 방문에도 건강한 두피로 만나요</p>
+        <div style={{ textAlign: "center", padding: "32px 0 10px", borderTop: `1px solid ${C.border}`, marginTop: 8 }}>
+          <p style={{ fontSize: 17, fontWeight: 800, letterSpacing: "0.26em", color: C.brand, marginBottom: 10, marginRight: "-0.26em" }}>SOGAM</p>
+          <p style={{ fontSize: 12, color: C.muted }}>다음 방문에도 건강한 두피로 만나요</p>
         </div>
       </div>
     </div>
