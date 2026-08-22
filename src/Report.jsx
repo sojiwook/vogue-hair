@@ -191,7 +191,7 @@ function DiagnosisCard({ diagnosis }) {
 
 // ── 2. 내 두피 지도 ─────────────────────────────────────────────────────────
 
-function ScalpDetailMap({ visit, prevVisit, scalpParsed }) {
+function ScalpDetailMap({ visit, prevVisit, scalpParsed, surveyBacked = true }) {
   // 등급 라벨은 v3 채점 기준으로 매겨진 점수에만 붙인다.
   // v1 점수는 기준 자체가 달라(평균 45점대) 같은 등급표를 대면 온통 "집중 관리"가 된다.
   const graded = visit.analysis_version === "v3";
@@ -212,10 +212,18 @@ function ScalpDetailMap({ visit, prevVisit, scalpParsed }) {
     return (
       <div style={{ background: C.card, borderRadius: 14, padding: 24, marginBottom: 16, border: `1px solid ${C.border}` }}>
         <SectionTitle mb={20}>두피 지표</SectionTitle>
-        <MetricBar label="두피 수분" value={visit.moisture} color={C.blue} />
-        <MetricBar label="모발 탄력" value={visit.elasticity} color={C.green} />
-        <MetricBar label="수면 품질" value={visit.sleep}     color={C.brand} />
-        <MetricBar label="스트레스"  value={visit.stress}    color={C.red}  />
+        {/* 수분도·탄력도는 실제로 측정되지 않던 값이라 표시하지 않는다.
+            문진이 없으면 수면·스트레스도 기본값이므로 함께 감춘다. */}
+        {surveyBacked ? (
+          <>
+            <MetricBar label="수면 품질" value={visit.sleep}   color={C.brand} />
+            <MetricBar label="스트레스"  value={visit.stress}  color={C.red}  />
+          </>
+        ) : (
+          <p style={{ fontSize: 12.5, color: C.muted, lineHeight: 1.7 }}>
+            이번 방문은 두피 사진 분석만 진행했어요.<br />문진을 함께 하시면 수면·스트레스 지표도 보여드릴 수 있어요.
+          </p>
+        )}
       </div>
     );
   }
@@ -387,9 +395,6 @@ function CompareSection({ current, prev, aiComparable = true, surveyBacked = tru
   const metrics = [
     ...(hasScalp ? [{ key: "scalp_score", label: "두피",    higherIsBetter: true }] : []),
     ...(surveyBacked ? [{ key: "score", label: "웰니스", higherIsBetter: true }] : []),
-    ...(aiComparable ? [
-      { key: "moisture",   label: "수분도",   higherIsBetter: true  },
-    ] : []),
     ...(surveyBacked ? [
       { key: "sleep",      label: "수면",     higherIsBetter: true  },
       { key: "stress",     label: "스트레스", higherIsBetter: false },
@@ -460,7 +465,7 @@ function CompareSection({ current, prev, aiComparable = true, surveyBacked = tru
 const SD_LABELS = { 수분: "두피 수분", 모발밀도: "모발 밀도", 모공: "모공 상태", 유분: "유분 균형", 민감도: "민감도" };
 
 // 지난 방문에 "가장 취약했던" 항목을 골라, 그 항목의 이번 변화를 추적한다.
-// score_detail이 없으면 수분도(두 방문 모두 존재)로 대체한다.
+// score_detail이 없으면 추적하지 않는다 (예전 수분도 값은 실제 측정값이 아니었다).
 function pickFocusMetric(visit, prevVisit) {
   const cur = parseScoreDetail(visit.score_detail);
   const prev = parseScoreDetail(prevVisit?.score_detail);
@@ -471,9 +476,6 @@ function pickFocusMetric(visit, prevVisit) {
       const key = keys[0];
       return { label: SD_LABELS[key], prev: prev[key], cur: cur[key] };
     }
-  }
-  if (prevVisit?.moisture != null && visit.moisture != null) {
-    return { label: "두피 수분", prev: Number(prevVisit.moisture), cur: Number(visit.moisture) };
   }
   return null;
 }
@@ -650,24 +652,6 @@ function PhotoPairSection({ currentImages, prevImages, visit, prevVisit }) {
           ))}
         </div>
       )}
-
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 16 }}>
-        {[{ label: "수분도", key: "moisture", color: C.brand }, { label: "탄력도", key: "elasticity", color: C.green }].map(m => {
-          const diff = visit[m.key] - prevVisit[m.key];
-          const diffColor = diff > 0 ? C.green : diff < 0 ? C.red : C.muted;
-          const arrow = diff > 0 ? "▲" : diff < 0 ? "▼" : "─";
-          return (
-            <div key={m.key} style={{ background: C.bg, borderRadius: 10, padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span style={{ fontSize: 12, color: C.sub }}>{m.label}</span>
-              <span style={{ fontSize: 12, fontWeight: 800 }}>
-                <span style={{ color: C.muted }}>{prevVisit[m.key]} → </span>
-                <span style={{ color: m.color }}>{visit[m.key]}</span>
-                <span style={{ color: diffColor, fontSize: 11, marginLeft: 4 }}>{arrow}{Math.abs(diff)}</span>
-              </span>
-            </div>
-          );
-        })}
-      </div>
     </div>
   );
 }
@@ -684,7 +668,7 @@ function ProductCard({ text, visit }) {
         { key: '모발밀도', label: '모발 밀도' },
         { key: '유분', label: '유분' },
       ].filter(it => typeof detail[it.key] === 'number').map(it => `${it.label} ${detail[it.key]}점`)
-    : (visit.moisture != null ? [`수분도 ${visit.moisture}점`, `탄력도 ${visit.elasticity}점`] : []);
+    : [];  // 예전 데이터의 수분도·탄력도는 실제 측정값이 아니라 근거로 쓰지 않는다
 
   return (
     <div style={{ background: C.card, borderRadius: 14, padding: 24, marginBottom: 16, border: `1px solid ${C.border}` }}>
@@ -976,10 +960,6 @@ export default function Report() {
     (visit.analysis_version ?? null) !== (prevVisit.analysis_version ?? null);
   const comparablePrev = versionChanged ? null : prevVisit;
 
-  // 문진이 없으면 수면·스트레스·웰니스 점수는 실제 값이 아니라 기본값이다.
-  // 없는 숫자를 보여주느니 항목 자체를 감춘다.
-  const surveyBacked = scalpParsed?.surveyBacked !== false;
-
   // ?phone= 링크를 그대로 공유하면 전화번호가 상대방 대화방에 남는다 → 토큰 링크만 공유한다
   const shareUrl = visit.report_token
     ? `${window.location.origin}${window.location.pathname}?token=${visit.report_token}`
@@ -991,6 +971,11 @@ export default function Report() {
     catch { return { aiAnalysis: String(raw) }; }
   };
   const scalpParsed = parseScalpReport(visit.scalp_report);
+
+  // 문진이 없으면 수면·스트레스·웰니스 점수는 실제 값이 아니라 기본값이다.
+  // 없는 숫자를 보여주느니 항목 자체를 감춘다.
+  // (scalpParsed 를 읽으므로 반드시 그 아래에 있어야 한다)
+  const surveyBacked = scalpParsed?.surveyBacked !== false;
   console.log('[Report] scalpParsed.diagnosis:', scalpParsed?.diagnosis ?? '없음 (null)');
   const aiRaw = scalpParsed?.aiAnalysis;
   const scalpText = (aiRaw && typeof aiRaw === 'string' && aiRaw.trim())
@@ -1067,7 +1052,7 @@ export default function Report() {
 
         {/* 2. 내 두피 지도 */}
         <ScalpAreaMap scalpParsed={scalpParsed} />
-        <ScalpDetailMap visit={visit} prevVisit={comparablePrev} scalpParsed={scalpParsed} />
+        <ScalpDetailMap visit={visit} prevVisit={comparablePrev} scalpParsed={scalpParsed} surveyBacked={surveyBacked} />
 
         {/* 3. 변화 추적 */}
         <CompareSection current={visit} prev={prevVisit} aiComparable={!versionChanged} surveyBacked={surveyBacked} />

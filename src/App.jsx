@@ -319,8 +319,8 @@ function ScalpReportView({ report, analyzing }) {
               <p style={{ fontSize: 16, fontWeight: 800, color: C.brand, letterSpacing: "-0.01em" }}>{parsed.scalpType}</p>
             </div>
           )}
-          {parsed.moisture !== undefined && <Metric label="수분도" value={parsed.moisture} color={C.blue} />}
-          {parsed.elasticity !== undefined && <Metric label="탄력도" value={parsed.elasticity} color={C.green} />}
+          {/* 수분도·탄력도는 실제로 측정되지 않던 값이라 손님에게 보여주지 않는다.
+              두피 점수 5개 지표가 실제 판단 결과다. */}
           {parsed.concerns?.length > 0 && (
             <div>
               <Label>주의 소견</Label>
@@ -857,8 +857,7 @@ function CompareSection({ current, prev, compact = false }) {
   const metrics = [
     { key: "score",      label: "종합 점수",  higherIsBetter: true },
     ...(aiComparable ? [
-      { key: "moisture",   label: "수분도",      higherIsBetter: true },
-      { key: "elasticity", label: "탄력도",      higherIsBetter: true },
+      // 수분도·탄력도 제외 — AI가 실제로 재던 값이 아니었다
     ] : []),
     { key: "sleep",      label: "수면 품질",   higherIsBetter: true },
     { key: "stress",     label: "스트레스",    higherIsBetter: false },
