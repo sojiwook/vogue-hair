@@ -336,23 +336,32 @@ N은 각각 0~100 정수. scalp_score는 두피 종합 점수.`;
     const RETRYABLE = new Set([429, 529]);
     const RETRY_DELAYS = [5000, 10000]; // 1차 5초, 2차 10초
 
+    // Opus 5는 기본으로 사고(thinking)를 하며, 사고 과정도 출력 토큰을 쓴다.
+    // effort 'low' + 넉넉한 max_tokens = 품질은 올리고 30초 벽은 넘지 않는 조합.
+    const MODEL = 'claude-opus-5';
     const anthropicBodyObj = {
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 2000,
+      model: MODEL,
+      max_tokens: 8000,
+      thinking: { type: 'adaptive' },
+      output_config: { effort: 'low' },
       messages: [{ role: 'user', content }],
     };
     if (systemText) anthropicBodyObj.system = systemText;
     const anthropicBody = JSON.stringify(anthropicBodyObj);
 
+    // 재시도까지 포함한 전체 예산. vercel.json maxDuration(60초) 안에 반드시 응답을 돌려줘야
+    // 고객에게 흰 화면 대신 안내 메시지가 간다.
+    const DEADLINE = Date.now() + 55000;
+
     let response;
     let attempt = 0;
 
     while (true) {
-      // 각 시도마다 25초 타임아웃 초기화
+      // 남은 예산만큼만 기다린다
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 25000);
+      const timeoutId = setTimeout(() => controller.abort(), Math.max(5000, DEADLINE - Date.now()));
 
-      console.log(`[analyze] Anthropic API 호출 — attempt ${attempt + 1}/3, model: claude-haiku-4-5-20251001`);
+      console.log(`[analyze] Anthropic API 호출 — attempt ${attempt + 1}/3, model: ${MODEL}`);
       try {
         response = await fetch('https://api.anthropic.com/v1/messages', {
           method: 'POST',
@@ -373,6 +382,12 @@ N은 각각 0~100 정수. scalp_score는 두피 종합 점수.`;
       if (!RETRYABLE.has(response.status)) break; // 성공 또는 비재시도 오류
 
       if (attempt >= 2) break; // 최대 재시도 소진
+
+      // 남은 시간이 부족하면 재시도해봐야 Vercel이 함수를 죽인다 — 바로 안내 메시지로 넘긴다
+      if (DEADLINE - Date.now() < RETRY_DELAYS[attempt] + 10000) {
+        console.warn("[analyze] 남은 시간 부족 — 재시도 생략");
+        break;
+      }
 
       const delay = RETRY_DELAYS[attempt];
       console.log(`[analyze] ${response.status} 오류 — ${delay / 1000}초 후 재시도 (${attempt + 1}/2)`);
@@ -398,7 +413,28 @@ N은 각각 0~100 정수. scalp_score는 두피 종합 점수.`;
     }
 
     const data = await response.json();
-    const resultText = data.content?.[0]?.text ?? '';
+
+    // Opus 5는 사고(thinking) 블록을 먼저 내보내므로 content[0]이 더 이상 분석 텍스트가 아니다.
+    // type이 'text'인 블록만 골라 이어붙여야 한다.
+    const resultText = (data.content ?? [])
+      .filter(block => block?.type === 'text')
+      .map(block => block.text)
+      .join('');
+
+    // 안전 분류기가 분석을 거절한 경우 (사진 문제 등) — 고객에게는 재촬영을 안내한다
+    if (data.stop_reason === 'refusal') {
+      console.error('[analyze] 모델이 분석을 거절함:', data.stop_details?.category ?? 'unknown');
+      return res.status(422).json({ error: '이 사진은 분석할 수 없어요. 다시 촬영해주세요.' });
+    }
+
+    if (!resultText.trim()) {
+      console.error('[analyze] 텍스트 블록 없음 — stop_reason:', data.stop_reason);
+      return res.status(502).json({ error: '분석 결과를 받지 못했어요. 다시 시도해주세요.' });
+    }
+
+    if (data.stop_reason === 'max_tokens') {
+      console.warn('[analyze] max_tokens 도달 — 응답이 잘렸을 수 있음');
+    }
 
     const scoreData = parseScalpScore(resultText);
     if (!scoreData) {
@@ -414,8 +450,8 @@ N은 각각 0~100 정수. scalp_score는 두피 종합 점수.`;
 
   } catch (error) {
     if (error.name === 'AbortError') {
-      console.error('[analyze] 타임아웃 (25초 초과)');
-      return res.status(504).json({ error: 'AI 분석 시간 초과 (25초). 이미지를 줄이거나 다시 시도해주세요.' });
+      console.error('[analyze] 타임아웃 (50초 초과)');
+      return res.status(504).json({ error: '분석이 오래 걸리고 있어요. 잠시 후 다시 시도해주세요.' });
     }
     console.error('[analyze] 예외:', error.name, error.message);
     return res.status(500).json({ error: error.message, name: error.name });

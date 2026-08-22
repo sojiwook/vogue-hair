@@ -526,6 +526,81 @@ function renderMarkdown(text) {
 
 // ── Main Report component ─────────────────────────────────────────────────────
 
+// ── 리포트 공유 ───────────────────────────────────────────────────────────────
+// 카카오 알림톡으로 리포트를 받은 고객이 가족·지인에게 그대로 전달할 수 있게 한다.
+// 카카오톡 인앱 브라우저는 navigator.share 지원이 기기마다 달라서 링크 복사 폴백이 필수다.
+
+function ShareButton({ url }) {
+  const [copied, setCopied] = useState(false);
+  const [failed, setFailed] = useState(false);
+
+  const copyLink = async () => {
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(url);
+      } else {
+        // 구형·인앱 브라우저는 clipboard API를 막아둔 경우가 있다
+        const ta = document.createElement("textarea");
+        ta.value = url;
+        ta.style.position = "fixed";
+        ta.style.opacity = "0";
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand("copy");
+        document.body.removeChild(ta);
+      }
+      setFailed(false);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    } catch {
+      // 복사조차 막힌 환경 — 주소를 직접 보여주고 길게 눌러 복사하도록 안내
+      setFailed(true);
+    }
+  };
+
+  const handleShare = async () => {
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: "소감 두피 웰니스 리포트", text: "제 두피 웰니스 리포트예요 ✦", url });
+        return;
+      } catch (e) {
+        // 사용자가 공유창을 그냥 닫은 경우는 오류가 아니다
+        if (e?.name === "AbortError") return;
+      }
+    }
+    await copyLink();
+  };
+
+  return (
+    <div style={{ background: C.card, borderRadius: 16, padding: 20, marginBottom: 16, border: `1px solid ${C.border}` }}>
+      <button
+        onClick={handleShare}
+        style={{
+          width: "100%", padding: "14px", borderRadius: 12,
+          border: `1.5px solid ${C.gold}`, background: C.goldBg, color: C.gold,
+          fontSize: 15, fontWeight: 700, fontFamily: "inherit", cursor: "pointer",
+          transition: "all 0.2s",
+        }}
+      >
+        {copied ? "✓ 링크가 복사되었어요" : "📤 이 리포트 공유하기"}
+      </button>
+
+      <p style={{ fontSize: 11, color: C.muted, textAlign: "center", marginTop: 10, lineHeight: 1.5 }}>
+        공유하면 받은 분도 이름·사진이 담긴 리포트를 볼 수 있어요
+      </p>
+
+      {failed && (
+        <p style={{
+          fontSize: 11, color: C.sub, marginTop: 10, padding: "10px 12px",
+          background: C.bg, borderRadius: 10, wordBreak: "break-all", lineHeight: 1.6,
+        }}>
+          아래 주소를 길게 눌러 복사해 주세요<br />{url}
+        </p>
+      )}
+    </div>
+  );
+}
+
 export default function Report() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -658,6 +733,11 @@ export default function Report() {
   );
 
   const { customer, visit, prevVisit } = data;
+
+  // ?phone= 링크를 그대로 공유하면 전화번호가 상대방 대화방에 남는다 → 토큰 링크만 공유한다
+  const shareUrl = visit.report_token
+    ? `${window.location.origin}${window.location.pathname}?token=${visit.report_token}`
+    : null;
 
   const parseScalpReport = raw => {
     if (!raw) return null;
@@ -841,6 +921,9 @@ export default function Report() {
             </>
           )}
         </div>
+
+        {/* 공유 */}
+        {shareUrl && <ShareButton url={shareUrl} />}
 
         {/* 하단 */}
         <div style={{ textAlign: "center", padding: "20px 0" }}>

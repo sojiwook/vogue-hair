@@ -1,6 +1,6 @@
 {
   "functions": {
-    "api/analyze.js": { "maxDuration": 30 },
+    "api/analyze.js": { "maxDuration": 60 },
     "api/sendAlimtalk.js": { "maxDuration": 10 }
   },
   "rewrites": [
