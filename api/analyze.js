@@ -6,9 +6,20 @@ function parseScalpScore(text) {
       const raw = i === 0 ? m[1].trim() : m[1].replace(/\s+/g, '');
       const parsed = JSON.parse(raw);
       if (typeof parsed.scalp_score === 'number' && parsed.detail && typeof parsed.detail === 'object') {
+        // basis(판단 근거)는 없어도 분석은 성립하므로 선택 항목으로 둔다.
+        // 문자열만 남겨 예상치 못한 구조가 저장되는 걸 막는다.
+        let basis = null;
+        if (parsed.basis && typeof parsed.basis === 'object' && !Array.isArray(parsed.basis)) {
+          basis = {};
+          for (const [k, v] of Object.entries(parsed.basis)) {
+            if (typeof v === 'string' && v.trim()) basis[k] = v.trim().slice(0, 60);
+          }
+          if (Object.keys(basis).length === 0) basis = null;
+        }
         return {
           scalp_score: Math.min(100, Math.max(0, Math.round(parsed.scalp_score))),
           score_detail: parsed.detail,
+          score_basis: basis,
         };
       }
     } catch { /* 2차 시도로 진행 */ }
@@ -139,21 +150,25 @@ ${concernsLine}
         const prev = (ci.prevScoreDetail && typeof ci.prevScoreDetail === 'object' && !Array.isArray(ci.prevScoreDetail))
           ? ci.prevScoreDetail : null;
         const fmtScore = (key) => prev?.[key] != null ? `${prev[key]}점` : '미측정';
+        // 지표 이름을 실제 값과 맞춘다. 예전에는 모발밀도를 "모공 밀도",
+        // 유분을 "모공 균형", 민감도를 "탄력도"라고 잘못 붙여 보내고 있었다.
+        // AI는 그 이름을 그대로 믿고 문장을 써서, 손님은 엉뚱한 항목 설명을 읽었다.
         const prevSection = prev
-          ? `이전 방문 수치 (참고):
-수분도: ${fmtScore('수분')} / 50 평균
-모공 밀도: ${fmtScore('모발밀도')} / 50 평균
-모공 상태: ${fmtScore('모공')} / 50 평균
-모공 균형: ${fmtScore('유분')} / 50 평균
-탄력도: ${fmtScore('민감도')} / 50 평균
-가장 낮은 항목: 이전 방문 기준`
+          ? `이전 방문 수치 (참고, 같은 기준으로 채점된 값):
+수분: ${fmtScore('수분')}
+모공 상태: ${fmtScore('모공')}
+유분 균형: ${fmtScore('유분')}
+민감도: ${fmtScore('민감도')}
+모발 밀도: ${fmtScore('모발밀도')}`
           : '이전 방문 수치: 없음 (첫 측정)';
-        const system = `당신은 두피 전문 분석가입니다. 고객의 두피 이미지와 측정 수치를 보고 부위별 분석 텍스트를 작성합니다.
+        const system = `당신은 두피 전문 분석가입니다. 고객의 두피 이미지를 보고 부위별 분석 텍스트를 작성합니다.
 
 [필수 규칙]
-- 모든 문장은 이 고객의 실제 수치에서 출발해야 합니다
-- 수치를 직접 인용하세요: "수분도 35점은", "모공 균형 30점이"처럼
-- 평균(50점 기준) 대비 위치를 명시하세요: "평균보다 15점 낮은", "평균 수준인"
+- 모든 문장은 이미지에서 실제로 관찰한 것에서 출발해야 합니다
+- 본인이 매긴 점수를 직접 인용하세요: "수분 52점은", "유분 균형 66점이"처럼
+- 다른 사람이나 평균과 비교하지 마세요. 근거로 삼을 데이터가 없습니다.
+  "평균보다 낮은", "평균 수준인", "또래보다" 같은 표현을 절대 쓰지 마세요.
+- 비교가 필요하면 이전 방문 수치와만 비교하세요
 - 일반론 금지: "두피 관리가 중요합니다" 같은 문장 사용 불가
 - 항목 레이블("관찰:", "행동:") 없이 자연스러운 서술체로 작성
 
@@ -183,8 +198,14 @@ ${concernsLine}
 - 안전하게 중간값을 주려 하지 말 것. 근거에 따라 판단한 점수를 그대로 쓸 것.
 
 응답 맨 마지막에 반드시 아래 JSON 한 줄 출력 (설명 없이):
-[SCORE]{"scalp_score":N,"detail":{"유분":N,"수분":N,"모공":N,"민감도":N,"모발밀도":N}}[/SCORE]
-N은 각각 0~100 정수. 문장에서 인용한 수치와 반드시 일치할 것.`;
+[SCORE]{"scalp_score":N,"detail":{"유분":N,"수분":N,"모공":N,"민감도":N,"모발밀도":N},"basis":{"유분":"근거","수분":"근거","모공":"근거","민감도":"근거","모발밀도":"근거"}}[/SCORE]
+
+detail의 N은 각각 0~100 정수. 문장에서 인용한 수치와 반드시 일치할 것.
+basis에는 각 점수를 그렇게 매긴 이유를 이미지에서 관찰한 사실로 15자 내외로 쓸 것.
+- 좋은 예: "모공 주변 각질 다수 관찰", "모발 굵기 고르고 밀도 양호"
+- 나쁜 예: "보통 수준입니다"(관찰 아님), "평균보다 낮음"(비교 금지)
+사진에서 확인되지 않아 판단이 어려운 항목은 basis에 "사진으로 확인 어려움"이라고 쓸 것.
+`;
         const userText = `부위: ${ci.label}
 ${prevSection}
 
@@ -341,9 +362,15 @@ ${(ci.prevMoisture != null || ci.prevElasticity != null) ? '이전 방문 데이
   근거가 보이면 그때 올리거나 내릴 것.
 - 안전하게 중간값을 주려 하지 말 것. 근거에 따라 판단한 점수를 그대로 쓸 것.
 
-응답 마지막에 반드시 아래 JSON 한 줄을 출력하세요 (설명 없이):
-[SCORE]{"scalp_score":N,"detail":{"유분":N,"수분":N,"모공":N,"민감도":N,"모발밀도":N}}[/SCORE]
-N은 각각 0~100 정수. scalp_score는 두피 종합 점수.`;
+응답 맨 마지막에 반드시 아래 JSON 한 줄 출력 (설명 없이):
+[SCORE]{"scalp_score":N,"detail":{"유분":N,"수분":N,"모공":N,"민감도":N,"모발밀도":N},"basis":{"유분":"근거","수분":"근거","모공":"근거","민감도":"근거","모발밀도":"근거"}}[/SCORE]
+
+detail의 N은 각각 0~100 정수. 문장에서 인용한 수치와 반드시 일치할 것.
+basis에는 각 점수를 그렇게 매긴 이유를 이미지에서 관찰한 사실로 15자 내외로 쓸 것.
+- 좋은 예: "모공 주변 각질 다수 관찰", "모발 굵기 고르고 밀도 양호"
+- 나쁜 예: "보통 수준입니다"(관찰 아님), "평균보다 낮음"(비교 금지)
+사진에서 확인되지 않아 판단이 어려운 항목은 basis에 "사진으로 확인 어려움"이라고 쓸 것.
+`;
     };
 
     // purpose 또는 concerns 필드가 있으면 buildPrompt 호출 (synthesis 포함)
@@ -489,6 +516,7 @@ N은 각각 0~100 정수. scalp_score는 두피 종합 점수.`;
       result: cleanText,
       scalp_score: scoreData?.scalp_score ?? null,
       score_detail: scoreData?.score_detail ?? null,
+      score_basis: scoreData?.score_basis ?? null,
     });
 
   } catch (error) {
