@@ -3,6 +3,19 @@
 
 import crypto from "crypto";
 
+
+// 로그에 수신번호가 남지 않게 가린다 (CLAUDE.md 6장: 전화번호는 발송 후 로그에 남기지 않음).
+// 솔라피 오류 응답에는 수신번호가 그대로 담겨 오는 경우가 있어, 찍기 전에 반드시 통과시킨다.
+function maskPhones(value) {
+  let json;
+  try { json = JSON.stringify(value); } catch { return "[직렬화 불가]"; }
+  if (!json) return String(value);
+  return json.replace(
+    /(\+?82[-\s]?1[016789]|01[016789])[-\s]?(\d{3,4})[-\s]?(\d{4})/g,
+    (_m, head) => `${head}-****-****`,
+  );
+}
+
 function makeSignature(apiKey, apiSecret) {
   const date = new Date().toISOString();
   const salt = crypto.randomBytes(16).toString("hex");
@@ -96,13 +109,13 @@ export default async function handler(req, res) {
     const result = await response.json();
 
     if (!response.ok) {
-      console.error("솔라피 오류:", result);
+      console.error("솔라피 오류:", maskPhones(result));
       return res.status(500).json({ error: "알림톡 발송 실패", detail: result });
     }
 
     return res.status(200).json({ success: true, result });
   } catch (err) {
-    console.error("sendAlimtalk 예외:", err);
+    console.error("sendAlimtalk 예외:", err?.name, maskPhones(err?.message));
     return res.status(500).json({ error: "서버 오류", detail: err.message });
   }
 }
