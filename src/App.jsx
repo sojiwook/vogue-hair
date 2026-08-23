@@ -83,6 +83,20 @@ function Field({ label, value, onChange, placeholder, type = "text", style = {} 
   );
 }
 
+// 등급 구간은 Report.jsx의 GRADES, api/analyze.js의 채점 기준과 반드시 같게 유지할 것.
+// 세 곳이 어긋나면 같은 점수가 화면마다 다른 등급으로 보인다.
+const GRADE_BANDS = [
+  { min: 90, label: "매우 좋음", color: "#1f7a52" },
+  { min: 75, label: "좋음",      color: "#2f7d5a" },
+  { min: 60, label: "보통",      color: "#8a7320" },
+  { min: 45, label: "관리 필요",  color: "#b0611a" },
+  { min: 25, label: "집중 관리",  color: "#c4483c" },
+  { min: 0,  label: "매우 취약",  color: "#9c2f26" },
+];
+const gradeLabel = s => (GRADE_BANDS.find(g => s >= g.min) ?? GRADE_BANDS[5]).label;
+// v3 이전 점수는 채점 기준이 달라 등급 색을 붙이지 않는다
+const gradeColor = (s, graded) => graded ? (GRADE_BANDS.find(g => s >= g.min) ?? GRADE_BANDS[5]).color : C.blue;
+
 function Chip({ score, label = "웰니스" }) {
   const color = score >= 70 ? C.green : score >= 50 ? "#b07800" : C.red;
   const bg = score >= 70 ? "#edf7f1" : score >= 50 ? "#fff8e6" : "#fff0f0";
@@ -577,8 +591,12 @@ function ScalpTab({ customer, onUpdate }) {
     }
 
     // 부위별 분석 후 제품 추천 합성 (이미지 없는 텍스트 기반 단일 호출)
+    // 코스메틱 라인이 준비될 때까지 꺼둔다. 손님에게 보여주지도 않는 글을
+    // 만드느라 AI 호출 비용과 분석 시간을 쓸 이유가 없다.
+    // 다시 켤 때는 이 상수와 Report.jsx 의 SHOW_PRODUCT_RECOMMENDATION 을 함께 true 로.
+    const GENERATE_PRODUCT_RECOMMENDATION = false;
     let productSynthText = '';
-    if (avgScoreDetail || avgScalpScore !== null) {
+    if (GENERATE_PRODUCT_RECOMMENDATION && (avgScoreDetail || avgScalpScore !== null)) {
       try {
         const { data: latestSurvey } = await supabase
           .from("surveys")
@@ -1172,24 +1190,46 @@ function HistoryTab({ customer, onAddVisit, onUpdate }) {
                         {r?.scalpType && r.scalpType !== "분석 참조" && (
                           <p style={{ fontSize: 12, color: C.sub, marginBottom: 8 }}>두피 타입: <strong>{r.scalpType}</strong></p>
                         )}
-                        {r?.moisture !== undefined && (
-                          <div style={{ marginBottom: 8 }}>
-                            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}>
-                              <span style={{ fontSize: 11, color: C.muted }}>수분도</span>
-                              <span style={{ fontSize: 11, fontWeight: 800, color: C.blue }}>{r.moisture}</span>
+                        {/* 수분도·탄력도 바 대신 실제 판단 결과인 5개 지표를 보여준다.
+                            수분도는 score_detail의 수분과 같은 값을 이름만 바꿔 중복 표시하던 것이고,
+                            탄력도는 애초에 측정되던 값이 아니었다. */}
+                        {(() => {
+                          const sd = v.score_detail
+                            ? (typeof v.score_detail === 'object' ? v.score_detail : (() => { try { return JSON.parse(v.score_detail); } catch { return null; } })())
+                            : null;
+                          if (!sd) return null;
+                          const items = [
+                            { k: '수분', label: '수분' },
+                            { k: '유분', label: '유분' },
+                            { k: '모공', label: '모공' },
+                            { k: '민감도', label: '민감도' },
+                            { k: '모발밀도', label: '모발밀도' },
+                          ].filter(it => typeof sd[it.k] === 'number');
+                          if (items.length === 0) return null;
+                          const graded = v.analysis_version === 'v3';
+                          return (
+                            <div style={{ marginBottom: 10 }}>
+                              {v.scalp_score != null && (
+                                <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginBottom: 8 }}>
+                                  <span style={{ fontSize: 11, color: C.muted }}>두피 종합</span>
+                                  <span style={{ fontSize: 15, fontWeight: 800, color: gradeColor(v.scalp_score, graded) }}>{v.scalp_score}</span>
+                                  {graded && <span style={{ fontSize: 11, fontWeight: 700, color: gradeColor(v.scalp_score, true) }}>{gradeLabel(v.scalp_score)}</span>}
+                                </div>
+                              )}
+                              {items.map(it => (
+                                <div key={it.k} style={{ marginBottom: 7 }}>
+                                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}>
+                                    <span style={{ fontSize: 11, color: C.muted }}>{it.label}</span>
+                                    <span style={{ fontSize: 11, fontWeight: 800, color: gradeColor(sd[it.k], graded) }}>
+                                      {graded ? `${gradeLabel(sd[it.k])} ` : ""}{sd[it.k]}
+                                    </span>
+                                  </div>
+                                  <Bar value={sd[it.k]} color={gradeColor(sd[it.k], graded)} />
+                                </div>
+                              ))}
                             </div>
-                            <Bar value={r.moisture} color={C.blue} />
-                          </div>
-                        )}
-                        {r?.elasticity !== undefined && (
-                          <div style={{ marginBottom: 8 }}>
-                            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}>
-                              <span style={{ fontSize: 11, color: C.muted }}>탄력도</span>
-                              <span style={{ fontSize: 11, fontWeight: 800, color: C.green }}>{r.elasticity}</span>
-                            </div>
-                            <Bar value={r.elasticity} color={C.green} />
-                          </div>
-                        )}
+                          );
+                        })()}
                         {r?.concerns?.length > 0 && (
                           <div style={{ marginBottom: 8 }}>
                             <p style={{ fontSize: 11, color: C.muted, marginBottom: 4 }}>주의 소견</p>

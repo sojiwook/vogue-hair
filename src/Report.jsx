@@ -5,6 +5,10 @@ const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_KEY;
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
+// 제품 추천 노출 스위치.
+// 코스메틱 라인이 준비되면 true 로 바꾸면 바로 다시 나온다.
+const SHOW_PRODUCT_RECOMMENDATION = false;
+
 // ── 소감(SOGAM) 디자인 토큰 ───────────────────────────────────────────────────
 // 방향: 미니멀 웰니스. 브랜드 오렌지는 '손님이 읽어야 할 것'(점수·변화·행동)에만 쓰고
 // 나머지는 무채색으로 비운다. 색을 아껴야 정작 중요한 숫자가 눈에 들어온다.
@@ -1079,7 +1083,10 @@ export default function Report() {
         )}
 
         {/* 6. 제품 추천 (측정값 근거 포함, 1곳에만) */}
-        {productText && <ProductCard text={productText} visit={visit} />}
+        {/* 제품 추천은 코스메틱 라인이 준비될 때까지 손님에게 보여주지 않는다.
+            AI는 계속 생성하고 있으므로(splitAnalysisText가 분리해 둠) 아래 한 줄만
+            되살리면 다시 노출된다. ProductCard 컴포넌트도 그대로 남겨둔다. */}
+        {SHOW_PRODUCT_RECOMMENDATION && productText && <ProductCard text={productText} visit={visit} />}
 
         {/* 메모 */}
         {visit.note && (
